@@ -46,11 +46,10 @@ import {
 import {
     spawnGjc,
     abortGjcSession,
-} from './gjc-cli.js';
-import {
     getPendingGjcApprovalsForSession,
     resolveGjcToolApproval,
-} from './gjc-sdk-bridge.js';
+    shutdownGjcWorker,
+} from './gjc-worker-client.js';
 import {
     stripAnsiSequences,
     normalizeDetectedUrl,
@@ -1651,8 +1650,26 @@ async function startServer() {
         });
 
         await closeSessionsWatcher();
-        // Clean up plugin processes on shutdown
+        let shutdownStarted = false;
         const shutdownRuntimeServices = async () => {
+            if (shutdownStarted) {
+                return;
+            }
+            shutdownStarted = true;
+
+            // Stop new HTTP/WebSocket work before permanently gating GJC starts.
+            server.close();
+            for (const client of wss.clients) {
+                client.terminate();
+            }
+            wss.close();
+            server.closeAllConnections?.();
+
+            try {
+                await shutdownGjcWorker();
+            } catch (err) {
+                console.error('[GJC Worker] Error stopping worker during shutdown:', err?.message || err);
+            }
             try {
                 await browserUseService.stopAllSessions();
             } catch (err) {

@@ -17,6 +17,9 @@ class FakeSdkClient {
   contextResponse: unknown = { items: [{ usage: { tokens: 120, contextWindow: 1_000, source: 'provider_anchor' } }] };
   usageResponse: unknown = { items: [{ input: 80, output: 20, cacheRead: 15, cacheWrite: 5, cost: 0.01 }] };
   closed = false;
+  controlError?: Error;
+  queryError?: Error;
+  replyError?: Error;
 
   onFrame(listener: (frame: GjcSdkFrame) => void): () => void {
     this.#listeners.add(listener);
@@ -24,16 +27,19 @@ class FakeSdkClient {
   }
 
   async control(operation: string, input: Record<string, unknown> = {}): Promise<unknown> {
+    if (this.controlError) throw this.controlError;
     this.controls.push({ operation, input });
     return { accepted: true };
   }
 
   async query(query: string): Promise<unknown> {
+    if (this.queryError) throw this.queryError;
     this.queries.push(query);
     return query === 'context.get' ? this.contextResponse : this.usageResponse;
   }
 
   reply(id: string, answer: unknown): void {
+    if (this.replyError) throw this.replyError;
     this.replies.push({ id, answer });
   }
 
@@ -135,6 +141,132 @@ test('GjcSdkBridge deduplicates replayed asks and re-presents rejected replies',
   });
   await bridge.close();
 });
+test('GjcSdkBridge normalizes ask options and preserves decision fallbacks', async () => {
+  const client = new FakeSdkClient();
+  const writer = createWriter();
+  const bridge = new GjcSdkBridge(client, 'session-fallbacks', writer);
+
+  client.emit({
+    type: 'action_needed',
+    id: 'action-allow-fallback',
+    kind: 'ask',
+    question: '   ',
+    options: [
+      '  Alpha  ',
+      { name: ' Beta ', description: ' second choice ' },
+      { label: '   ' },
+      42,
+    ],
+  });
+  const allowRequest = writer.messages.at(-1);
+  assert.deepEqual(allowRequest?.input, {
+    questions: [{
+      question: 'GJC needs your input',
+      header: 'GJC',
+      options: [
+        { label: 'Alpha' },
+        { label: 'Beta', description: 'second choice' },
+      ],
+      multiSelect: false,
+    }],
+  });
+  assert.equal(resolveGjcToolApproval(allowRequest?.requestId as string, {
+    allow: true,
+    message: '   ',
+  }), true);
+  assert.deepEqual(client.replies.at(-1), {
+    id: 'action-allow-fallback',
+    answer: 'Skip',
+  });
+  client.emit({ type: 'action_resolved', id: 'action-allow-fallback' });
+
+  client.emit({
+    type: 'action_needed',
+    id: 'action-deny-fallback',
+    kind: 'ask',
+    question: 'Continue?',
+    options: ['Proceed'],
+  });
+  const denyRequest = writer.messages.at(-1);
+  assert.equal(resolveGjcToolApproval(denyRequest?.requestId as string, {
+    allow: false,
+    message: '   ',
+  }), true);
+  assert.deepEqual(client.replies.at(-1), {
+    id: 'action-deny-fallback',
+    answer: 'No',
+  });
+  assert.equal(resolveGjcToolApproval('missing-request', { allow: true }), false);
+
+  await bridge.close();
+});
+
+test('pending asks with the same provider action id remain isolated by application session', async () => {
+  const firstClient = new FakeSdkClient();
+  const secondClient = new FakeSdkClient();
+  const firstWriter = createWriter();
+  const secondWriter = createWriter();
+  const firstBridge = new GjcSdkBridge(firstClient, 'session-first', firstWriter);
+  const secondBridge = new GjcSdkBridge(secondClient, 'session-second', secondWriter);
+  const action: GjcSdkFrame = {
+    type: 'action_needed',
+    id: 'shared-action',
+    kind: 'ask',
+    question: 'Choose',
+    options: ['One', 'Two'],
+  };
+
+  firstClient.emit(action);
+  secondClient.emit(action);
+  assert.equal(getPendingGjcApprovalsForSession('session-first').length, 1);
+  assert.equal(getPendingGjcApprovalsForSession('session-second').length, 1);
+
+  await firstBridge.close();
+  assert.equal(getPendingGjcApprovalsForSession('session-first').length, 0);
+  assert.equal(getPendingGjcApprovalsForSession('session-second').length, 1);
+  assert.equal(resolveGjcToolApproval(secondWriter.messages.at(-1)?.requestId as string, {
+    allow: true,
+    message: 'Two',
+  }), true);
+  assert.deepEqual(secondClient.replies, [{ id: 'shared-action', answer: 'Two' }]);
+
+  await secondBridge.close();
+});
+
+test('SDK failures remain contained and rejected replies are re-presented', async () => {
+  const client = new FakeSdkClient();
+  const writer = createWriter();
+  const bridge = new GjcSdkBridge(client, 'session-sdk-failure', writer);
+
+  client.controlError = new Error('transport failed');
+  assert.equal(await bridge.abort(), false);
+  client.queryError = new Error('usage unavailable');
+  await bridge.emitTokenBudget();
+  assert.equal(writer.messages.length, 0);
+
+  client.emit({
+    type: 'action_needed',
+    id: 'action-reply-failure',
+    kind: 'ask',
+    question: 'Proceed?',
+    options: ['Yes', 'No'],
+  });
+  const requestId = writer.messages.at(-1)?.requestId as string;
+  client.replyError = new Error('connection closed');
+  assert.equal(resolveGjcToolApproval(requestId, {
+    allow: true,
+    message: 'Yes',
+  }), true);
+  assert.equal(writer.messages.at(-1)?.requestId, requestId);
+  assert.deepEqual(writer.messages.at(-1)?.context, {
+    source: 'gjc-sdk',
+    replyRejected: 'connection_closed',
+  });
+  assert.equal(getPendingGjcApprovalsForSession('session-sdk-failure').length, 1);
+
+  await bridge.close();
+  assert.equal(getPendingGjcApprovalsForSession('session-sdk-failure').length, 0);
+});
 
 test('GjcSdkBridge uses SDK abort and emits normalized token-budget status', async () => {
   const client = new FakeSdkClient();
@@ -163,6 +295,32 @@ test('GjcSdkBridge uses SDK abort and emits normalized token-budget status', asy
   });
   await bridge.close();
   assert.equal(client.closed, true);
+});
+
+test('GjcSdkBridge suppresses late usage after close begins', async () => {
+  const client = new FakeSdkClient();
+  const writer = createWriter();
+  let resolveQueries!: (value: unknown) => void;
+  const pendingQueries = new Promise<unknown>((resolve) => {
+    resolveQueries = resolve;
+  });
+  client.contextResponse = pendingQueries;
+  client.usageResponse = pendingQueries;
+  const bridge = new GjcSdkBridge(client, 'session-late-usage', writer);
+
+  const emission = bridge.emitTokenBudget();
+  await Promise.resolve();
+  const closing = bridge.close();
+  resolveQueries({
+    items: [{
+      usage: { tokens: 120, contextWindow: 1_000 },
+      input: 80,
+      output: 20,
+    }],
+  });
+  await Promise.all([emission, closing]);
+
+  assert.equal(writer.messages.length, 0);
 });
 
 test('extractGjcTokenBudget returns null without observed usage', () => {

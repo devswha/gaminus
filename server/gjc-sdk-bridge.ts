@@ -129,7 +129,7 @@ function negativeAnswer(options: GjcQuestionOption[]): string | undefined {
 
 function answerFromDecision(pending: PendingGjcApproval, decision: GjcApprovalDecision): unknown {
   if (!decision.allow) {
-    return negativeAnswer(pending.options) ?? decision.message?.trim() ?? 'No';
+    return negativeAnswer(pending.options) ?? (decision.message?.trim() || 'No');
   }
   const updatedInput = asObject(decision.updatedInput);
   const answers = asObject(updatedInput?.answers);
@@ -214,6 +214,7 @@ export class GjcSdkBridge {
         this.#client.query('usage.get'),
       ]);
       const tokenBudget = extractGjcTokenBudget(context, usage);
+      if (this.#closed) return;
       if (!tokenBudget) return;
       sendToWriter(this.#writer, createNormalizedMessage({
         kind: 'status',

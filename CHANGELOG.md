@@ -11,6 +11,13 @@ future server artifacts are published only through
 - Added Node.js 24 support for dependency installation, development, tests, and
   builds while retaining Node.js 22 compatibility. Production server artifacts
   remain pinned to Node.js 22.
+- Completed GJC worker Checkpoints A and B: GJC CLI/SDK execution now runs
+  behind one supervised Node/TypeScript Protocol v1 worker with strict bounded
+  NDJSON, immutable run correlation, controlled-question mirroring, crash
+  restart, explicit failure reporting, graceful drain, detached POSIX process
+  groups, and atomic Windows kill-on-close Job Object ownership. Browser replay,
+  persistence, and notifications remain application
+  owned; Claude, Codex, Cursor, and OpenCode routing is unchanged.
 
 ### Native server distribution and operations
 
