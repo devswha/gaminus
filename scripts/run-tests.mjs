@@ -6,8 +6,8 @@ const TEST_FILE_PATTERN = /\.(?:test|spec)\.(?:js|ts|tsx)$/;
 const SKIPPED_DIRECTORIES = new Set(['dist', 'dist-server', 'node_modules', 'release']);
 
 const nodeMajor = Number.parseInt(process.versions.node.split('.')[0], 10);
-if (nodeMajor !== 22) {
-  console.error(`[test] Node 22 is required; current runtime is Node ${process.versions.node}.`);
+if (nodeMajor !== 22 && nodeMajor !== 24) {
+  console.error(`[test] Node 22 or 24 is required; current runtime is Node ${process.versions.node}.`);
   process.exit(1);
 }
 

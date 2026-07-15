@@ -6,6 +6,12 @@ future server artifacts are published only through
 
 ## Unreleased
 
+### Source development
+
+- Added Node.js 24 support for dependency installation, development, tests, and
+  builds while retaining Node.js 22 compatibility. Production server artifacts
+  remain pinned to Node.js 22.
+
 ### Native server distribution and operations
 
 - Established the Linux x86_64, glibc 2.35+, Node.js 22 server artifact:

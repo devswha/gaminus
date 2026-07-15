@@ -35,7 +35,7 @@ Anbieterspezifische Modelle, Aufwandssteuerungen, Berechtigungsmodi, Sitzungsver
 
 ### Anforderungen
 
-- Node.js 22.x
+- Node.js 22.x oder 24.x
 - npm und Git
 - Mindestens eine unterstützte, bereits installierte und authentifizierte Agent-CLI
 
@@ -156,7 +156,7 @@ Folgen Sie [docs/INSTALL.md](docs/INSTALL.md) für die genauen Befehle zur Ersti
 | `npm run build` | Produktions-Client und -Server bauen |
 | `npm run verify` | Das vollständige Release-Gate ausführen |
 
-Verwenden Sie Node.js 22 und führen Sie vor dem Einreichen von Änderungen das vollständige Gate aus:
+Verwenden Sie Node.js 22 oder 24 und führen Sie vor dem Einreichen von Änderungen das vollständige Gate aus:
 
 ```bash
 npm run verify

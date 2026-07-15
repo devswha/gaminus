@@ -35,7 +35,7 @@ Provider-specific models, effort controls, permission modes, session history, sk
 
 ### Requirements
 
-- Node.js 22.x
+- Node.js 22.x or 24.x
 - npm and Git
 - At least one supported agent CLI, already installed and authenticated
 
@@ -156,7 +156,7 @@ Follow [docs/INSTALL.md](docs/INSTALL.md) for the exact first-install commands a
 | `npm run build` | Build the production client and server |
 | `npm run verify` | Run the complete release gate |
 
-Use Node.js 22 and run the full gate before submitting changes:
+Use Node.js 22 or 24 and run the full gate before submitting changes:
 
 ```bash
 npm run verify
