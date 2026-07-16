@@ -24,6 +24,15 @@ future server artifacts are published only through
   content on phones. Its toggles (show thinking, show raw parameters, send by
   Ctrl+Enter) are now also available under Settings → Appearance on every
   device, and voice remains under Settings → Voice.
+- Fixed the chat pane staying on its "Continue your conversation" empty state
+  even though the messages API had returned the transcript: the session store
+  signals changes by re-rendering with a stable object identity, but the
+  message window was memoized on that identity and never recomputed after the
+  fetch landed. Live tmux views and session history now render their messages.
+- Fixed "새 세션" spawn always failing with "작업 폴더는 홈 아래 실존 디렉터리만":
+  the control tower resolves the spawn cwd with expanduser against its own
+  process CWD, so the app now sends home-relative folders with an explicit
+  `~/` prefix instead of a bare relative path.
 
 ### Authentication
 
