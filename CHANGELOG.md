@@ -6,6 +6,18 @@ future server artifacts are published only through
 
 ## Unreleased
 
+### Versioning
+
+- Started Gajae App's own semantic version line at `1.0.0`, marking the current
+  MVP as the first stable cut. The inherited upstream `1.36.x` package version
+  is retired; upstream numbers below remain historical provenance only and are
+  never reused as Gajae App versions. Releases are cut from this line: the
+  release commit tags `v<version>`, publishes
+  `gajae-app-server-<version>-linux-x64-node22.tar.gz`, and converts this
+  `Unreleased` section into the dated version heading. The running server
+  reports its version at `/health`; the desktop shell keeps its independent
+  `desktopVersion` line.
+
 ### Source development
 
 - Added Node.js 24.15.0+ support for dependency installation, development,
