@@ -18,6 +18,19 @@ future server artifacts are published only through
   reports its version at `/health`; the desktop shell keeps its independent
   `desktopVersion` line.
 
+### Authentication
+
+- Login is no longer required by default (`GAJAE_AUTH=none`): every request and
+  WebSocket upgrade acts as the single implicit owner account, and the login,
+  registration, and setup screens are skipped. `GAJAE_AUTH=password` restores
+  the original single-account JWT/cookie flow unchanged.
+- The fail-closed exposure guard now refuses to start an unauthenticated server
+  on a non-loopback bind; `GAJAE_ALLOW_UNAUTH_REMOTE=1` downgrades that to a
+  loud warning for trusted private networks (VPN/tailnet). Loopback binds are
+  unaffected.
+- `/api/auth/login` and `/api/auth/register` return 404 while authentication is
+  disabled; `/api/auth/status` reports the active `authMode`.
+
 ### Source development
 
 - Added Node.js 24.15.0+ support for dependency installation, development,

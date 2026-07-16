@@ -49,3 +49,36 @@ test('allowRemoteSetup does not silence the exposure warning when users exist', 
     assert.equal(r.level, 'warn');
     assert.equal(r.reason, 'network-exposed');
 });
+
+test('auth mode none: loopback binds stay ok', () => {
+    for (const host of ['127.0.0.1', 'localhost', '::1']) {
+        const r = evaluateExposure({ host, hasUsers: true, authMode: 'none' });
+        assert.equal(r.level, 'ok', host);
+        assert.equal(r.reason, 'loopback');
+    }
+});
+
+test('auth mode none: any non-loopback bind is blocked regardless of users', () => {
+    for (const host of ['0.0.0.0', '::', '192.168.0.10', '100.123.228.51']) {
+        for (const hasUsers of [true, false]) {
+            const r = evaluateExposure({ host, hasUsers, authMode: 'none' });
+            assert.equal(r.level, 'block', `${host} hasUsers=${hasUsers}`);
+            assert.equal(r.reason, 'unauthenticated-remote');
+            assert.match(r.message, /GAJAE_AUTH=none/);
+            assert.match(r.message, /GAJAE_ALLOW_UNAUTH_REMOTE=1/);
+        }
+    }
+});
+
+test('auth mode none: GAJAE_ALLOW_UNAUTH_REMOTE=1 downgrades the block to a loud warning', () => {
+    const r = evaluateExposure({ host: '100.123.228.51', hasUsers: true, authMode: 'none', allowUnauthRemote: true });
+    assert.equal(r.level, 'warn');
+    assert.equal(r.reason, 'unauthenticated-remote-override');
+    assert.match(r.message, /NO authentication/);
+});
+
+test('auth mode none: allowRemoteSetup does not bypass the unauthenticated block', () => {
+    const r = evaluateExposure({ host: '0.0.0.0', hasUsers: false, authMode: 'none', allowRemoteSetup: true });
+    assert.equal(r.level, 'block');
+    assert.equal(r.reason, 'unauthenticated-remote');
+});

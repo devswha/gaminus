@@ -50,7 +50,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
   const [socket, setSocket] = useState<WebSocket | null>(null);
   const [latestMessage, setLatestMessage] = useState<ServerEvent | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const { token } = useAuth();
+  const { user } = useAuth();
 
   const dispatch = useCallback((event: ServerEvent) => {
     for (const listener of listenersRef.current) {
@@ -133,7 +133,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
     setSocket(null);
     setIsConnected(false);
     previousSocket?.close();
-    connect(generation, Boolean(token));
+    connect(generation, Boolean(user));
 
     return () => {
       if (socketGenerationRef.current !== generation) return;
@@ -145,7 +145,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       setIsConnected(false);
       activeSocket?.close();
     };
-  }, [clearReconnect, connect, token]);
+  }, [clearReconnect, connect, user]);
 
   useEffect(() => () => {
     unmountedRef.current = true;

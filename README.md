@@ -70,7 +70,7 @@ npm run desktop:dev
 <a id="first-run"></a>
 ## First run
 
-1. **Create the owner account.** Open Gajae App and create the only local application account. The username must contain at least 3 characters and the password at least 6.
+1. **No login by default.** Gajae App starts with authentication disabled (`GAJAE_AUTH=none`) — it is a self-hosted, single-user tool. Set `GAJAE_AUTH=password` to require the local owner account (username ≥ 3 characters, password ≥ 6). With authentication disabled, the server refuses to listen on a non-loopback address unless `GAJAE_ALLOW_UNAUTH_REMOTE=1` explicitly acknowledges the exposure (trusted VPN/tailnet only).
 2. **Set the Git identity.** Enter the name and email used for commits made on this host. This writes the global Git `user.name` and `user.email`; a GitHub sign-in is not required.
 3. **Connect coding agents.** Complete available provider login flows during onboarding, or skip them and use **Settings → Agents** later. Host-level CLI authentication remains the source of truth.
 4. **Add a project.** Use the sidebar project action to select an existing directory or create/clone a workspace. Paths refer to the machine running the server, not necessarily the device displaying the browser.
@@ -167,7 +167,7 @@ This runs the dependency audit, type checks, all test partitions, lint, identity
 
 ## Security and data boundaries
 
-- Web authentication uses an `HttpOnly`, `SameSite=Strict` cookie with persistent logout revocation.
+- Authentication is disabled by default for self-hosting (`GAJAE_AUTH=none`); the exposure guard blocks unauthenticated non-loopback binds unless `GAJAE_ALLOW_UNAUTH_REMOTE=1` is set. With `GAJAE_AUTH=password`, web authentication uses an `HttpOnly`, `SameSite=Strict` cookie with persistent logout revocation.
 - Credentials are not accepted from URL query parameters. External agent API keys use the `X-API-Key` header.
 - Project files are resolved through canonical path and symlink checks; writes use same-directory atomic replacement.
 - Uploads use private per-request temporary directories that are cleaned after completion or failure.

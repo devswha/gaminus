@@ -113,6 +113,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const statusPayload = await parseJsonSafely<AuthStatusPayload>(statusResponse);
         if (!isCurrent(snapshot, mutation) || controller.signal.aborted) return;
 
+        // Auth mode 'none': the server treats every request as the implicit
+        // owner — no setup, no login screen, no local token. Resolve the owner
+        // via /api/auth/user (which succeeds without credentials) and finish.
+        if (statusPayload?.authMode === 'none') {
+          setNeedsSetup(false);
+          const ownerResponse = await api.auth.user({ signal: controller.signal });
+          if (!isCurrent(snapshot, mutation) || controller.signal.aborted) return;
+          if (ownerResponse.ok) {
+            const ownerPayload = await parseJsonSafely<AuthUserPayload>(ownerResponse);
+            if (!isCurrent(snapshot, mutation) || controller.signal.aborted) return;
+            if (ownerPayload?.user) {
+              setUser(ownerPayload.user);
+              return;
+            }
+          }
+          setError(AUTH_ERROR_MESSAGES.authStatusCheckFailed);
+          return;
+        }
+
         if (statusPayload?.needsSetup) {
           setNeedsSetup(true);
           return;

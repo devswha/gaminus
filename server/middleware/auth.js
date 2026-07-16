@@ -8,6 +8,40 @@ const AUTH_COOKIE_NAME = 'gajae_auth';
 const TOKEN_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
 const TOKEN_MAX_AGE_MS = TOKEN_MAX_AGE_SECONDS * 1000;
 
+/**
+ * Self-host auth mode (v1 policy: no login by default).
+ *   'none'     — every HTTP/WebSocket request acts as the implicit owner
+ *                account; /login and /register are disabled. The exposure
+ *                guard blocks non-loopback binds unless explicitly overridden.
+ *   'password' — the original single-account JWT/cookie flow.
+ * Pure resolver kept separate so the policy is unit-testable.
+ */
+const resolveAuthMode = (value) => (value === 'password' ? 'password' : 'none');
+const AUTH_MODE = resolveAuthMode(process.env.GAJAE_AUTH);
+const isAuthDisabled = () => AUTH_MODE === 'none';
+
+// In 'none' mode every request resolves to the single owner row. The row must
+// still exist because per-user preferences and notifications hang off users.id.
+// A fresh install gets one created with an unusable password hash — /login is
+// disabled in this mode, and bcrypt.compare can never match this sentinel.
+let implicitOwnerId = null;
+const getImplicitOwner = () => {
+  if (implicitOwnerId !== null) {
+    const cached = userDb.getUserById(implicitOwnerId);
+    if (cached) {
+      return cached;
+    }
+    implicitOwnerId = null;
+  }
+  let owner = userDb.getFirstUser();
+  if (!owner) {
+    const created = userDb.createUser('owner', 'disabled:auth-mode-none');
+    owner = userDb.getUserById(Number(created.id)) ?? { id: Number(created.id), username: created.username };
+  }
+  implicitOwnerId = owner.id;
+  return owner;
+};
+
 const tokenVersionKey = (userId) => `auth_token_version:${userId}`;
 const TOKEN_VERSION_SCHEMA_KEY = 'auth_token_version_schema';
 
@@ -124,6 +158,10 @@ const validateApiKey = (req, res, next) => {
 
 // JWT authentication middleware
 const authenticateToken = async (req, res, next) => {
+  if (isAuthDisabled()) {
+    req.user = getImplicitOwner();
+    return next();
+  }
   const token = getRequestToken(req);
 
   if (!token) {
@@ -159,6 +197,11 @@ const generateToken = (user) => {
 
 // WebSocket authentication function
 const authenticateWebSocket = (token) => {
+  if (isAuthDisabled()) {
+    const owner = getImplicitOwner();
+    return { userId: owner.id, username: owner.username };
+  }
+
   if (!token) {
     return null;
   }
@@ -184,6 +227,9 @@ export {
   parseStoredTokenVersion,
   incrementTokenVersion,
   AUTH_COOKIE_NAME,
+  AUTH_MODE,
+  resolveAuthMode,
+  isAuthDisabled,
   TOKEN_MAX_AGE_MS,
   JWT_SECRET
 };

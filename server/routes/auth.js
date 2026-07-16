@@ -5,10 +5,12 @@ import { userDb } from '../modules/database/index.js';
 import { getConnection } from '../modules/database/connection.js';
 import {
   AUTH_COOKIE_NAME,
+  AUTH_MODE,
   TOKEN_MAX_AGE_MS,
   authenticateToken,
   generateToken,
-  incrementTokenVersion
+  incrementTokenVersion,
+  isAuthDisabled
 } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -30,11 +32,24 @@ const clearAuthCookie = (req, res) => {
   res.clearCookie(AUTH_COOKIE_NAME, options);
 };
 
+// Auth mode 'none' disables the credential endpoints entirely — they must not
+// remain claimable while every request already acts as the implicit owner.
+const rejectWhenAuthDisabled = (req, res, next) => {
+  if (isAuthDisabled()) {
+    return res.status(404).json({ error: 'Authentication is disabled (GAJAE_AUTH=none).' });
+  }
+  next();
+};
+
 // Check auth status and setup requirements
 router.get('/status', async (req, res) => {
   try {
+    if (isAuthDisabled()) {
+      return res.json({ authMode: AUTH_MODE, needsSetup: false, isAuthenticated: true });
+    }
     const hasUsers = await userDb.hasUsers();
-    res.json({ 
+    res.json({
+      authMode: AUTH_MODE,
       needsSetup: !hasUsers,
       isAuthenticated: false // Will be overridden by frontend if token exists
     });
@@ -45,7 +60,7 @@ router.get('/status', async (req, res) => {
 });
 
 // User registration (setup) - only allowed if no users exist
-router.post('/register', async (req, res) => {
+router.post('/register', rejectWhenAuthDisabled, async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -105,7 +120,7 @@ router.post('/register', async (req, res) => {
 });
 
 // User login
-router.post('/login', async (req, res) => {
+router.post('/login', rejectWhenAuthDisabled, async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -153,6 +168,9 @@ router.get('/user', authenticateToken, (req, res) => {
 });
 
 router.post('/logout', authenticateToken, (req, res) => {
+  if (isAuthDisabled()) {
+    return res.json({ success: true, message: 'Authentication is disabled; nothing to log out.' });
+  }
   incrementTokenVersion(req.user.id);
   clearAuthCookie(req, res);
   res.json({ success: true, message: 'Logged out successfully' });

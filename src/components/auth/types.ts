@@ -16,6 +16,7 @@ export type AuthSessionPayload = {
 };
 
 export type AuthStatusPayload = {
+  authMode?: 'none' | 'password';
   needsSetup?: boolean;
 };
 
