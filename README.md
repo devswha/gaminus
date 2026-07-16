@@ -1,7 +1,7 @@
 <div align="center">
   <img src="public/logo.png" alt="Gajae App" width="96" height="96">
   <h1>Gajae App</h1>
-  <p>Run Gajae Code (GJC), Claude Code, Cursor, Codex, and OpenCode from one self-hosted web and desktop workspace.</p>
+  <p>Watch and steer the coding agents already running in your tmux — from one self-hosted web and desktop control surface.</p>
 </div>
 
 <p align="center">
@@ -16,17 +16,27 @@
 
 ## What Gajae App does
 
-Gajae App is a single-user control surface for coding agents running on your own machine or server. It combines project and session discovery, streaming chat, approval handling, a file browser and editor, live CLI visibility, notifications, skills, MCP configuration, and remote desktop targets.
+Gajae App is a single-user **control window onto the coding agents you already run in tmux** on your own machine or server. It discovers those sessions automatically and lets you, from a browser or phone:
+
+- **See what is running** — every tmux session with a supported agent inside appears in the sidebar, without any registration step.
+- **Watch conversations live** — Gajae Code (GJC) sessions render as a real-time chat view built from their transcripts; Claude Code and Codex sessions open as attached terminals.
+- **Steer sessions** — send messages into a live GJC session, spawn new ones, or kill them; type directly into attached terminals for other agents.
+- **Get notified** — web push fires when a live turn finishes, even with every tab closed.
+- **Browse history** — past provider sessions are indexed automatically from their native session stores.
+
+Sessions stay owned by tmux: restarting or stopping Gajae App never terminates them.
+
+The app can also run agents directly from the web (streaming chat with tool-call approvals, a file browser and editor, skills, and MCP configuration) — an auxiliary lane on top of the control surface. The confirmed v1/v2 scope baseline lives in [docs/MVP.md](docs/MVP.md).
 
 The app does not include a model subscription. Install and authenticate every agent CLI you intend to use on the same host and under the same operating-system user that runs Gajae App.
 
 ### Supported agents
 
-- **Gajae Code (GJC)**
-- **Claude Code**
-- **Cursor**
-- **Codex**
-- **OpenCode**
+- **Gajae Code (GJC)** — live chat view, message relay, spawn/kill, plus web-run chat
+- **Claude Code** — tmux terminal attach, plus web-run chat
+- **Codex** — tmux terminal attach, plus web-run chat
+- **Cursor** — web-run chat
+- **OpenCode** — web-run chat
 
 Provider-specific models, effort controls, permission modes, session history, skills, and MCP features appear only when that provider supports them.
 
@@ -73,33 +83,36 @@ npm run desktop:dev
 1. **No login by default.** Gajae App starts with authentication disabled (`GAJAE_AUTH=none`) — it is a self-hosted, single-user tool. Set `GAJAE_AUTH=password` to require the local owner account (username ≥ 3 characters, password ≥ 6). With authentication disabled, the server refuses to listen on a non-loopback address unless `GAJAE_ALLOW_UNAUTH_REMOTE=1` explicitly acknowledges the exposure (trusted VPN/tailnet only).
 2. **Set the Git identity.** Enter the name and email used for commits made on this host. This writes the global Git `user.name` and `user.email`; a GitHub sign-in is not required.
 3. **Connect coding agents.** Complete available provider login flows during onboarding, or skip them and use **Settings → Agents** later. Host-level CLI authentication remains the source of truth.
-4. **Add a project.** Use the sidebar project action to select an existing directory or create/clone a workspace. Paths refer to the machine running the server, not necessarily the device displaying the browser.
-5. **Start a session.** Select the project, choose an available provider, adjust the provider-supported model and permission controls, then send the first prompt.
+4. **Open a live session.** Agents already running under tmux appear in the sidebar automatically. GJC sessions open as a live chat view you can send messages into; Claude Code and Codex sessions open as attached terminals.
+5. **Optionally run an agent from the web.** Add a project directory, choose an available provider, adjust the provider-supported model and permission controls, then send the first prompt.
 
 <a id="daily-workflow"></a>
 ## Daily workflow
 
+### Live tmux sessions (the core lane)
+
+- Sessions are discovered, not registered: any tmux session with a supported agent inside appears automatically, including freshly started GJC panes that have not spoken yet.
+- GJC rows open as a live chat view fed by the session transcript. Send messages, run slash commands, spawn a new tmux GJC session, or kill one — destructive actions are allowed only when the agent provably runs inside that session, and a same-named replacement session is refused.
+- Claude Code and Codex rows open as terminal-backed views; typing there is the input path. Sessions tunneled through SSH surface as attach-only rows.
+- Live rows remain owned by tmux rather than by the web server. A server restart must not terminate those external sessions.
+- Message relay uses a local control-tower endpoint (`TOWER_URL`, default `127.0.0.1:3019`); when it is unreachable, viewing keeps working and sending degrades gracefully.
+
 ### Projects and sessions
 
-- Add a local workspace by absolute path, or clone a Git repository through the project wizard.
+- Provider session stores are indexed automatically; expand a project in the sidebar to resume indexed sessions. Provider identities stay separate.
+- For web-run chats, add a local workspace by absolute path or clone a Git repository through the project wizard. Paths refer to the machine running the server, not necessarily the device displaying the browser.
 - Store a GitHub token under **Settings → API & Credentials** only when an HTTPS clone needs one; SSH URLs use the server user's SSH configuration.
-- Expand a project in the sidebar to resume indexed sessions. Gajae App reads supported provider session stores and keeps provider identities separate.
-- Start a new chat from the selected project. Stopping a run stops the active agent process; it does not delete the project or its history.
 
-### Chat and approvals
+### Chat and approvals (web-run lane)
 
 - Send text, image attachments, file mentions, and provider-supported slash commands.
 - Review tool calls and answer permission requests in the chat instead of blindly enabling unrestricted execution.
 - Use model, effort, thinking, and permission controls only where the selected provider exposes them.
-- Resume earlier sessions from the sidebar. Session names can be edited without changing provider-native session identifiers.
+- Stopping a run stops the active agent process; it does not delete the project or its history.
 
 ### Files
 
 Open the Files panel to browse the configured workspace root, preview images and Markdown, edit text files, create folders, and upload files. File access is constrained to validated project paths; symlink and traversal escapes are rejected.
-
-### Live CLI sessions
-
-Gajae App can surface supported agent sessions that are already running under `tmux`. Live rows use the tmux session name, open as terminal-backed views, and remain owned by tmux rather than by the web server. A server restart must not terminate those external sessions.
 
 ### Notifications
 
