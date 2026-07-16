@@ -72,9 +72,25 @@ export function classifySpawnResponse(status: number, body: string): LiveSpawnRe
   return { ok, reachable: true, conflict: status === 409, detail };
 }
 
+/**
+ * Normalize the spawn form's HOME-relative cwd ("workspace/my-proj") to an
+ * explicit "~/workspace/my-proj" before proxying. The tower resolves the value
+ * with expanduser + realpath, so a bare relative path would resolve against the
+ * tower's own process CWD — which is not necessarily $HOME — and get rejected
+ * as "not an existing directory under home". Absolute and "~"-prefixed inputs
+ * pass through untouched.
+ */
+export function normalizeSpawnCwd(cwd: string): string {
+  const trimmed = cwd.trim();
+  if (trimmed.startsWith('/') || trimmed === '~' || trimmed.startsWith('~/')) {
+    return trimmed;
+  }
+  return `~/${trimmed}`;
+}
+
 /** Proxies a spawn request to the tower's /spawn. Never throws — returns a result. */
 export async function spawnLiveSession(name: string, cwd: string): Promise<LiveSpawnResult> {
-  const body = new URLSearchParams({ name, cwd });
+  const body = new URLSearchParams({ name, cwd: normalizeSpawnCwd(cwd) });
   let response: Response;
   try {
     response = await fetch(`${towerUrl()}/spawn`, {
