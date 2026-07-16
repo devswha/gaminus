@@ -55,6 +55,12 @@ export default function QuickSettingsPanelView() {
     [consumeSuppressedClick],
   );
 
+  // On mobile the floating edge handle covers chat content, so the panel is
+  // not rendered at all; the same toggles live in Settings → Appearance.
+  if (isMobile) {
+    return null;
+  }
+
   return (
     <>
       <QuickSettingsHandle

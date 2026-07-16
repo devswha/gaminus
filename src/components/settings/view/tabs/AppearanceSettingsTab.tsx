@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import { useUiPreferences } from '../../../../hooks/useUiPreferences';
 import { DarkModeToggle } from '../../../../shared/view/ui';
 import type { CodeEditorSettingsState, ProjectSortOrder } from '../../types/types';
 import LanguageSelector from '../../../../shared/view/ui/LanguageSelector';
@@ -28,6 +29,7 @@ export default function AppearanceSettingsTab({
   onCodeEditorFontSizeChange,
 }: AppearanceSettingsTabProps) {
   const { t } = useTranslation('settings');
+  const { preferences, setPreference } = useUiPreferences();
 
   return (
     <div className="space-y-8">
@@ -45,6 +47,41 @@ export default function AppearanceSettingsTab({
       <SettingsSection title={t('mainTabs.appearance')}>
         <SettingsCard>
           <LanguageSelector />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title={t('quickSettings.sections.toolDisplay')}>
+        <SettingsCard divided>
+          <SettingsRow label={t('quickSettings.showThinking')}>
+            <SettingsToggle
+              checked={preferences.showThinking}
+              onChange={(value) => setPreference('showThinking', value)}
+              ariaLabel={t('quickSettings.showThinking')}
+            />
+          </SettingsRow>
+
+          <SettingsRow label={t('quickSettings.showRawParameters')}>
+            <SettingsToggle
+              checked={preferences.showRawParameters}
+              onChange={(value) => setPreference('showRawParameters', value)}
+              ariaLabel={t('quickSettings.showRawParameters')}
+            />
+          </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title={t('quickSettings.sections.inputSettings')}>
+        <SettingsCard>
+          <SettingsRow
+            label={t('quickSettings.sendByCtrlEnter')}
+            description={t('quickSettings.sendByCtrlEnterDescription')}
+          >
+            <SettingsToggle
+              checked={preferences.sendByCtrlEnter}
+              onChange={(value) => setPreference('sendByCtrlEnter', value)}
+              ariaLabel={t('quickSettings.sendByCtrlEnter')}
+            />
+          </SettingsRow>
         </SettingsCard>
       </SettingsSection>
 
