@@ -18,6 +18,13 @@ future server artifacts are published only through
   reports its version at `/health`; the desktop shell keeps its independent
   `desktopVersion` line.
 
+### Web interface
+
+- Removed the floating quick-settings edge handle on mobile; it overlapped chat
+  content on phones. Its toggles (show thinking, show raw parameters, send by
+  Ctrl+Enter) are now also available under Settings → Appearance on every
+  device, and voice remains under Settings → Voice.
+
 ### Authentication
 
 - Login is no longer required by default (`GAJAE_AUTH=none`): every request and
