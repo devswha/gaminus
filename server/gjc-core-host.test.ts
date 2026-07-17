@@ -348,3 +348,79 @@ test('native job authority persists and reconciles state across process replacem
     await rm(temporaryRoot, { recursive: true, force: true });
   }
 });
+
+test('native PTY relays bounded input, resize, output, and shutdown lifecycle', async () => {
+  const child = spawn(corePath, [
+    'pty',
+    '--',
+    process.execPath,
+    '-e',
+    'process.stdin.pipe(process.stdout)',
+  ], {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  const frames: Array<Record<string, unknown>> = [];
+  let buffered = '';
+  let output = '';
+  let diagnostics = '';
+  let shutdownSent = false;
+  child.stdout.setEncoding('utf8');
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk: string) => {
+    diagnostics += chunk;
+  });
+
+  const completed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error('native PTY test timed out'));
+    }, 5_000);
+    child.stdout.on('data', (chunk: string) => {
+      buffered += chunk;
+      while (buffered.includes('\n')) {
+        const newline = buffered.indexOf('\n');
+        const line = buffered.slice(0, newline);
+        buffered = buffered.slice(newline + 1);
+        const frame = JSON.parse(line) as Record<string, unknown>;
+        frames.push(frame);
+        if (frame.kind === 'ready') {
+          child.stdin.write(`${JSON.stringify({
+            protocolVersion: 1,
+            method: 'pty.resize',
+            cols: 100,
+            rows: 30,
+          })}\n`);
+          child.stdin.write(`${JSON.stringify({
+            protocolVersion: 1,
+            method: 'pty.write',
+            data: Buffer.from('native-pty-token\n').toString('base64'),
+          })}\n`);
+        }
+        if (frame.kind === 'output' && typeof frame.data === 'string') {
+          output += Buffer.from(frame.data, 'base64').toString('utf8');
+          if (output.includes('native-pty-token') && !shutdownSent) {
+            shutdownSent = true;
+            child.stdin.write(`${JSON.stringify({
+              protocolVersion: 1,
+              method: 'pty.shutdown',
+            })}\n`);
+            child.stdin.end();
+          }
+        }
+      }
+    });
+    child.once('error', reject);
+    child.once('close', (code, signal) => {
+      clearTimeout(timer);
+      resolve({ code, signal });
+    });
+  });
+
+  const exit = await completed;
+  assert.deepEqual(exit, { code: 0, signal: null });
+  assert.equal(diagnostics, '');
+  assert.equal(frames[0]?.kind, 'ready');
+  assert.ok(frames.some((frame) => frame.kind === 'output'));
+  assert.ok(frames.some((frame) => frame.kind === 'exit'));
+  assert.match(output, /native-pty-token/u);
+});

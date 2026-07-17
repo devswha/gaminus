@@ -97,6 +97,10 @@ future server artifacts are published only through
   lease generations, and ordered idempotent events survive core replacement;
   startup reconciles active jobs to `interrupted`. Node does not access this
   database, and Protocol v1 and React remain unchanged.
+- Added a native single-child PTY lifecycle API with direct no-shell launch,
+  bounded base64 input/output, validated resize, deterministic exit reporting,
+  stdin-EOF cleanup, and explicit shutdown. The existing browser shell remains
+  on its unchanged Node path for this incremental slice.
 
 ### Native server distribution and operations
 

@@ -36,6 +36,9 @@ Implementation progress:
   Rust exclusively owns its sequential schema migrations; startup rejects
   unknown versions or invalid paths, atomically persists each mutation, and
   reconciles active jobs after process replacement.
+- **Checkpoint C slice 5 complete.** `gajae-core pty` owns one native PTY child
+  without a shell and exposes bounded base64 input/output, validated resize, exit,
+  EOF cleanup, and explicit shutdown over a separate strict 64 KiB NDJSON API.
 - Process ownership remains explicit: the Rust core is the detached POSIX
   process-group leader and the worker/GJC descendants stay attached. On Windows,
   the existing live-owner guard creates the Rust core atomically inside a
@@ -44,7 +47,7 @@ Implementation progress:
 - Source builds require the pinned Rust toolchain. Server release artifacts carry
   the host-native core executable and require no installed Rust toolchain.
 - Claude, Codex, Cursor, and OpenCode execution and watcher paths remain
-  unchanged. PTY, Git/worktree, and broader SQLite-backed native APIs remain in
+  unchanged. Git/worktree and broader SQLite-backed native APIs remain in
   Checkpoint C.
 
 ## Purpose
@@ -187,7 +190,7 @@ Extraction must preserve the existing observable GJC behavior before responsibil
 
 ### Checkpoint C: introduce the Rust core — in progress
 
-Slices 1 through 4 are complete:
+Slices 1 through 5 are complete:
 
 - Route only the GJC Node worker launch through the mandatory Rust process host.
 - Keep Protocol v1 opaque to Rust and authoritative in TypeScript.
@@ -202,13 +205,15 @@ Slices 1 through 4 are complete:
   NDJSON API, without changing worker Protocol v1 or application persistence.
 - Persist the job authority in a separate Rust-owned database with bundled
   SQLite and sequential fail-closed migrations.
+- Add a native single-child PTY lifecycle API with bounded framed I/O, resize,
+  exit reporting, and owner-driven shutdown.
 
 Remaining slices:
 
-- Move PTY lifecycle, Git/worktree operations, and their required state behind
-  explicit Rust APIs. Durable job persistence now preserves the defined
-  state-machine, crash reconciliation, fenced lease, and ordered idempotent
-  replay semantics.
+- Move Git/worktree operations and their required state behind explicit Rust
+  APIs. Durable job persistence and the native PTY lifecycle preserve the
+  defined state-machine, crash reconciliation, fenced lease, and ordered
+  idempotent replay semantics.
 
 ### Checkpoint D: thin desktop shell
 

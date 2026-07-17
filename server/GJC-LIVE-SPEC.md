@@ -1,6 +1,6 @@
 # GJC live provider specification
 
-Status: Checkpoints A and B complete; Checkpoint C native-host, GJC watcher, job-authority, and durable job persistence slices implemented (2026-07-17)
+Status: Checkpoints A and B complete; Checkpoint C native-host, watcher, durable jobs, and native PTY slices implemented (2026-07-17)
 
 GJC is the only provider routed through an isolated provider worker. Claude,
 Codex, Cursor, and OpenCode retain their existing execution paths.
@@ -98,9 +98,18 @@ database built with bundled SQLite. Rust exclusively owns its version table and
 sequential migrations; Node must not open this database. Invalid paths, unknown
 schema versions, migration failures, or corrupt state fail closed. Explicit
 transitions remain fenced by monotonically generated owner leases, and startup
-reconciliation moves persisted active jobs to `interrupted`. PTY and
-Git/worktree ownership have not moved. Worker Protocol v1 and all React behavior
-are unchanged.
+reconciliation moves persisted active jobs to `interrupted`. Git/worktree
+ownership has not moved. Worker Protocol v1 and all React behavior are unchanged.
+
+### Native PTY lifecycle
+
+`gajae-core pty -- <program> [args...]` owns exactly one native PTY child and
+launches it directly without shell interpretation. Its separate Protocol 1
+NDJSON control stream is capped at 64 KiB per frame; binary input/output uses
+bounded base64 payloads, resize dimensions are validated, and output, exit,
+stdin EOF cleanup, and explicit shutdown are observable. The existing
+browser-shell `node-pty` path has not moved in this slice, so React and current
+terminal behavior remain unchanged.
 
 ### Worker process
 

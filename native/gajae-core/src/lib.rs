@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 pub mod jobs;
+pub mod pty;
 pub mod watcher;
 
 use std::ffi::OsString;
@@ -18,6 +19,10 @@ pub enum Command {
     },
     Jobs {
         database: PathBuf,
+    },
+    Pty {
+        program: OsString,
+        args: Vec<OsString>,
     },
 }
 
@@ -50,6 +55,7 @@ where
         },
         Some(command) if command == "watch" => parse_watch_args(args),
         Some(command) if command == "jobs" => parse_jobs_args(args),
+        Some(command) if command == "pty" => parse_pty_args(args),
         _ => Err(ParseError),
     }
 }
@@ -69,6 +75,20 @@ where
     Ok(Command::Jobs { database })
 }
 
+fn parse_pty_args<I>(args: I) -> Result<Command, ParseError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let mut args = args.into_iter();
+    if args.next().as_deref() != Some(std::ffi::OsStr::new("--")) {
+        return Err(ParseError);
+    }
+    let program = args.next().ok_or(ParseError)?;
+    Ok(Command::Pty {
+        program,
+        args: args.collect(),
+    })
+}
 fn parse_watch_args<I>(args: I) -> Result<Command, ParseError>
 where
     I: IntoIterator<Item = OsString>,
@@ -155,6 +175,18 @@ mod tests {
                 args: vec![os("$not-expanded")],
             })
         );
+    }
+
+    #[test]
+    fn parses_opaque_pty_program_and_arguments() {
+        assert_eq!(
+            parse_args([os("pty"), os("--"), os("program name"), os("$not-expanded")]),
+            Ok(Command::Pty {
+                program: os("program name"),
+                args: vec![os("$not-expanded")],
+            })
+        );
+        assert_eq!(parse_args([os("pty"), os("program")]), Err(ParseError));
     }
 
     #[test]
