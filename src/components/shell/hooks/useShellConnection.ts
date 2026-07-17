@@ -110,11 +110,6 @@ export function useShellConnection({
 
       try {
         const wsUrl = getShellWebSocketUrl();
-        if (!wsUrl) {
-          connectingRef.current = false;
-          setIsConnecting(false);
-          return;
-        }
 
         connectingRef.current = true;
 

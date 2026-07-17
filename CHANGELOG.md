@@ -33,6 +33,11 @@ future server artifacts are published only through
   the control tower resolves the spawn cwd with expanduser against its own
   process CWD, so the app now sends home-relative folders with an explicit
   `~/` prefix instead of a bare relative path.
+- Fixed the 외부 CLI / Shell terminal rendering a black screen in no-login
+  mode: the shell WebSocket URL builder required a client-side localStorage
+  auth token that never exists under `GAJAE_AUTH=none`, so the socket was
+  never even attempted. WebSocket authentication is server-side (auth cookie
+  or implicit owner), so the client-side token gate is gone.
 
 ### Authentication
 
