@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::io::{BufRead, Read, Write};
+use std::path::{Path, PathBuf};
 
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -47,7 +49,7 @@ pub struct Lease {
     generation: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JobEvent {
     sequence: u64,
@@ -64,7 +66,7 @@ pub struct JobSnapshot {
     last_sequence: u64,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct Job {
     state: JobState,
     lease: Option<Lease>,
@@ -73,7 +75,7 @@ struct Job {
     event_sequences: HashMap<String, usize>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct JobAuthority {
     jobs: HashMap<String, Job>,
 }
@@ -88,6 +90,7 @@ pub enum AuthorityError {
     InvalidTransition,
     TerminalJob,
     EventConflict,
+    Storage,
 }
 
 impl JobAuthority {
@@ -214,6 +217,130 @@ impl JobAuthority {
     }
 }
 
+struct PersistentAuthority {
+    authority: JobAuthority,
+    connection: Connection,
+}
+
+impl PersistentAuthority {
+    fn open(path: &Path) -> Result<Self, AuthorityError> {
+        let path = validate_database_path(path)?;
+        let mut connection = Connection::open(path).map_err(|_| AuthorityError::Storage)?;
+        connection
+            .pragma_update(None, "journal_mode", "WAL")
+            .map_err(|_| AuthorityError::Storage)?;
+        connection
+            .pragma_update(None, "foreign_keys", true)
+            .map_err(|_| AuthorityError::Storage)?;
+        migrate(&mut connection)?;
+
+        let encoded: Option<String> = connection
+            .query_row(
+                "SELECT state_json FROM job_authority WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| AuthorityError::Storage)?;
+        let authority = match encoded {
+            Some(encoded) => serde_json::from_str(&encoded).map_err(|_| AuthorityError::Storage)?,
+            None => JobAuthority::default(),
+        };
+        let mut persistent = Self {
+            authority,
+            connection,
+        };
+        if !persistent.authority.reconcile().is_empty() {
+            persistent.save()?;
+        }
+        Ok(persistent)
+    }
+
+    fn mutate<T>(
+        &mut self,
+        operation: impl FnOnce(&mut JobAuthority) -> Result<T, AuthorityError>,
+    ) -> Result<T, AuthorityError> {
+        let previous = self.authority.clone();
+        let result = operation(&mut self.authority)?;
+        if self.save().is_err() {
+            self.authority = previous;
+            return Err(AuthorityError::Storage);
+        }
+        Ok(result)
+    }
+
+    fn save(&mut self) -> Result<(), AuthorityError> {
+        let encoded =
+            serde_json::to_string(&self.authority).map_err(|_| AuthorityError::Storage)?;
+        let transaction = self
+            .connection
+            .transaction()
+            .map_err(|_| AuthorityError::Storage)?;
+        transaction
+            .execute(
+                "INSERT INTO job_authority (id, state_json) VALUES (1, ?1)
+                 ON CONFLICT(id) DO UPDATE SET state_json = excluded.state_json",
+                params![encoded],
+            )
+            .map_err(|_| AuthorityError::Storage)?;
+        transaction.commit().map_err(|_| AuthorityError::Storage)
+    }
+}
+
+fn validate_database_path(path: &Path) -> Result<PathBuf, AuthorityError> {
+    if !path.is_absolute() {
+        return Err(AuthorityError::Storage);
+    }
+    if let Ok(metadata) = std::fs::symlink_metadata(path) {
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(AuthorityError::Storage);
+        }
+    }
+    let file_name = path.file_name().ok_or(AuthorityError::Storage)?;
+    let parent = path.parent().ok_or(AuthorityError::Storage)?;
+    let canonical_parent = std::fs::canonicalize(parent).map_err(|_| AuthorityError::Storage)?;
+    if !canonical_parent.is_dir() {
+        return Err(AuthorityError::Storage);
+    }
+    Ok(canonical_parent.join(file_name))
+}
+
+fn migrate(connection: &mut Connection) -> Result<(), AuthorityError> {
+    let transaction = connection
+        .transaction()
+        .map_err(|_| AuthorityError::Storage)?;
+    transaction
+        .execute_batch(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY NOT NULL,
+                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );",
+        )
+        .map_err(|_| AuthorityError::Storage)?;
+    let version: i64 = transaction
+        .query_row(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|_| AuthorityError::Storage)?;
+    if version > 1 {
+        return Err(AuthorityError::Storage);
+    }
+    if version == 0 {
+        transaction
+            .execute_batch(
+                "CREATE TABLE job_authority (
+                    id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+                    state_json TEXT NOT NULL
+                );
+                INSERT INTO schema_migrations (version) VALUES (1);",
+            )
+            .map_err(|_| AuthorityError::Storage)?;
+    }
+    transaction.commit().map_err(|_| AuthorityError::Storage)
+}
+
 fn validate_id(value: &str) -> Result<(), AuthorityError> {
     if value.is_empty()
         || value.len() > 128
@@ -254,8 +381,11 @@ struct Response<'a> {
     error: Option<&'static str>,
 }
 
-pub fn run<R: BufRead, W: Write>(mut input: R, mut output: W) -> bool {
-    let mut authority = JobAuthority::default();
+pub fn run<R: BufRead, W: Write>(database: &Path, mut input: R, mut output: W) -> bool {
+    let mut authority = match PersistentAuthority::open(database) {
+        Ok(authority) => authority,
+        Err(_) => return false,
+    };
     let mut frame = Vec::new();
     loop {
         frame.clear();
@@ -307,7 +437,10 @@ pub fn run<R: BufRead, W: Write>(mut input: R, mut output: W) -> bool {
     }
 }
 
-fn dispatch(authority: &mut JobAuthority, request: &Request) -> Result<Value, AuthorityError> {
+fn dispatch(
+    authority: &mut PersistentAuthority,
+    request: &Request,
+) -> Result<Value, AuthorityError> {
     let job_id = || {
         request
             .job_id
@@ -316,26 +449,30 @@ fn dispatch(authority: &mut JobAuthority, request: &Request) -> Result<Value, Au
     };
     let lease = || request.lease.as_ref().ok_or(AuthorityError::StaleLease);
     match request.method.as_str() {
-        "job.create" => serde_json::to_value(authority.create(job_id()?)?)
+        "job.create" => serde_json::to_value(authority.mutate(|inner| inner.create(job_id()?))?)
             .map_err(|_| AuthorityError::InvalidIdentifier),
-        "lease.acquire" => serde_json::to_value(
-            authority.acquire(
+        "job.get" => serde_json::to_value(authority.authority.snapshot(job_id()?)?)
+            .map_err(|_| AuthorityError::InvalidIdentifier),
+        "lease.acquire" => serde_json::to_value(authority.mutate(|inner| {
+            inner.acquire(
                 job_id()?,
                 request
                     .owner
                     .as_deref()
                     .ok_or(AuthorityError::InvalidIdentifier)?,
-            )?,
-        )
+            )
+        })?)
         .map_err(|_| AuthorityError::InvalidIdentifier),
-        "job.transition" => serde_json::to_value(authority.transition(
-            job_id()?,
-            lease()?,
-            request.state.ok_or(AuthorityError::InvalidTransition)?,
-        )?)
+        "job.transition" => serde_json::to_value(authority.mutate(|inner| {
+            inner.transition(
+                job_id()?,
+                lease()?,
+                request.state.ok_or(AuthorityError::InvalidTransition)?,
+            )
+        })?)
         .map_err(|_| AuthorityError::InvalidIdentifier),
-        "event.append" => serde_json::to_value(
-            authority.append_event(
+        "event.append" => serde_json::to_value(authority.mutate(|inner| {
+            inner.append_event(
                 job_id()?,
                 lease()?,
                 request
@@ -346,15 +483,24 @@ fn dispatch(authority: &mut JobAuthority, request: &Request) -> Result<Value, Au
                     .payload
                     .clone()
                     .ok_or(AuthorityError::InvalidIdentifier)?,
-            )?,
+            )
+        })?)
+        .map_err(|_| AuthorityError::InvalidIdentifier),
+        "event.replay" => serde_json::to_value(
+            authority
+                .authority
+                .replay(job_id()?, request.after.unwrap_or(0))?,
         )
         .map_err(|_| AuthorityError::InvalidIdentifier),
-        "event.replay" => {
-            serde_json::to_value(authority.replay(job_id()?, request.after.unwrap_or(0))?)
-                .map_err(|_| AuthorityError::InvalidIdentifier)
+        "job.reconcile" if request.job_id.is_none() => {
+            let previous = authority.authority.clone();
+            let changed = authority.authority.reconcile();
+            if !changed.is_empty() && authority.save().is_err() {
+                authority.authority = previous;
+                return Err(AuthorityError::Storage);
+            }
+            serde_json::to_value(changed).map_err(|_| AuthorityError::InvalidIdentifier)
         }
-        "job.reconcile" if request.job_id.is_none() => serde_json::to_value(authority.reconcile())
-            .map_err(|_| AuthorityError::InvalidIdentifier),
         _ => Err(AuthorityError::InvalidIdentifier),
     }
 }
@@ -369,12 +515,13 @@ fn error_code(error: AuthorityError) -> &'static str {
         AuthorityError::InvalidTransition => "invalid_transition",
         AuthorityError::TerminalJob => "terminal_job",
         AuthorityError::EventConflict => "event_conflict",
+        AuthorityError::Storage => "storage_failure",
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthorityError, JobAuthority, JobState};
+    use super::{AuthorityError, JobAuthority, JobState, PersistentAuthority};
     use serde_json::json;
 
     #[test]
@@ -446,5 +593,79 @@ mod tests {
         assert_eq!(changed[0].job_id, "job-a");
         assert_eq!(changed[0].state, JobState::Interrupted);
         assert!(changed[0].lease.is_none());
+    }
+
+    #[test]
+    fn persists_state_and_reconciles_active_jobs_on_reopen() {
+        let directory = std::env::temp_dir().join(format!(
+            "gajae-core-jobs-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let database = directory.join("jobs.sqlite3");
+
+        let mut first = PersistentAuthority::open(&database).unwrap();
+        first.mutate(|inner| inner.create("job-1")).unwrap();
+        let lease = first
+            .mutate(|inner| inner.acquire("job-1", "owner-1"))
+            .unwrap();
+        first
+            .mutate(|inner| inner.transition("job-1", &lease, JobState::Running))
+            .unwrap();
+        first
+            .mutate(|inner| inner.append_event("job-1", &lease, "event-1", json!({"value": 1})))
+            .unwrap();
+        drop(first);
+
+        let second = PersistentAuthority::open(&database).unwrap();
+        let snapshot = second.authority.snapshot("job-1").unwrap();
+        assert_eq!(snapshot.state, JobState::Interrupted);
+        assert!(snapshot.lease.is_none());
+        assert_eq!(second.authority.replay("job-1", 0).unwrap().len(), 1);
+        let version: i64 = second
+            .connection
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(version, 1);
+        drop(second);
+
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn rejects_unknown_future_schema_versions() {
+        let directory = std::env::temp_dir().join(format!(
+            "gajae-core-jobs-future-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos(),
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let database = directory.join("jobs.sqlite3");
+        let connection = rusqlite::Connection::open(&database).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE schema_migrations (
+                    version INTEGER PRIMARY KEY NOT NULL,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO schema_migrations (version) VALUES (2);",
+            )
+            .unwrap();
+        drop(connection);
+
+        assert!(matches!(
+            PersistentAuthority::open(&database),
+            Err(AuthorityError::Storage)
+        ));
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }

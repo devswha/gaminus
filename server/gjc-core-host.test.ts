@@ -284,7 +284,9 @@ test('native core carries the real worker initialize and shutdown protocol', asy
   assert.equal(diagnostics, '');
 });
 
-test('native job authority enforces leases and idempotent ordered replay', async () => {
+test('native job authority persists and reconciles state across process replacement', async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'gajae-core-jobs-'));
+  const database = path.join(temporaryRoot, 'jobs.sqlite3');
   const lease = { owner: 'worker-a', generation: 1 };
   const frames = [
     { protocolVersion: 1, id: 'create', method: 'job.create', jobId: 'job-1' },
@@ -308,27 +310,41 @@ test('native job authority enforces leases and idempotent ordered replay', async
       eventId: 'message-1',
       payload: { text: 'hello' },
     },
-    { protocolVersion: 1, id: 'replay', method: 'event.replay', jobId: 'job-1', after: 0 },
-    { protocolVersion: 1, id: 'reconcile', method: 'job.reconcile' },
   ];
-  const result = await runCore(
-    ['jobs'],
-    [Buffer.from(frames.map((frame) => JSON.stringify(frame)).join('\n') + '\n')],
-  );
 
-  assert.equal(result.code, 0);
-  assert.equal(result.signal, null);
-  assert.equal(result.stderr.length, 0);
-  const responses = result.stdout.toString('utf8').trim().split('\n').map((line) => JSON.parse(line));
-  assert.deepEqual(responses.map((response) => response.id), frames.map((frame) => frame.id));
-  assert.deepEqual(responses[1].result, lease);
-  assert.equal(responses[2].result.state, 'running');
-  assert.deepEqual(responses[3].result, responses[4].result);
-  assert.deepEqual(responses[5].result, [{
-    sequence: 1,
-    eventId: 'message-1',
-    payload: { text: 'hello' },
-  }]);
-  assert.equal(responses[6].result[0].state, 'interrupted');
-  assert.equal(responses[6].result[0].lease, null);
+  try {
+    const first = await runCore(
+      ['jobs', '--database', database],
+      [Buffer.from(frames.map((frame) => JSON.stringify(frame)).join('\n') + '\n')],
+    );
+    assert.equal(first.code, 0);
+    assert.equal(first.signal, null);
+    assert.equal(first.stderr.length, 0);
+    const firstResponses = first.stdout.toString('utf8').trim().split('\n').map((line) => JSON.parse(line));
+    assert.deepEqual(firstResponses.map((response) => response.id), frames.map((frame) => frame.id));
+    assert.deepEqual(firstResponses[1].result, lease);
+    assert.equal(firstResponses[2].result.state, 'running');
+    assert.deepEqual(firstResponses[3].result, firstResponses[4].result);
+
+    const restartFrames = [
+      { protocolVersion: 1, id: 'get', method: 'job.get', jobId: 'job-1' },
+      { protocolVersion: 1, id: 'replay', method: 'event.replay', jobId: 'job-1', after: 0 },
+    ];
+    const second = await runCore(
+      ['jobs', '--database', database],
+      [Buffer.from(restartFrames.map((frame) => JSON.stringify(frame)).join('\n') + '\n')],
+    );
+    assert.equal(second.code, 0);
+    assert.equal(second.stderr.length, 0);
+    const secondResponses = second.stdout.toString('utf8').trim().split('\n').map((line) => JSON.parse(line));
+    assert.equal(secondResponses[0].result.state, 'interrupted');
+    assert.equal(secondResponses[0].result.lease, null);
+    assert.deepEqual(secondResponses[1].result, [{
+      sequence: 1,
+      eventId: 'message-1',
+      payload: { text: 'hello' },
+    }]);
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });

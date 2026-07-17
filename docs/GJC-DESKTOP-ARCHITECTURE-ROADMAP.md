@@ -31,6 +31,11 @@ Implementation progress:
   generations guard mutations, transitions are explicit, active jobs reconcile
   to `interrupted` after authority replacement, and event append/replay is ordered
   and idempotent.
+- **Checkpoint C slice 4 complete.** Durable job authority state now lives in a
+  separate Rust-owned SQLite database using `rusqlite` with bundled SQLite.
+  Rust exclusively owns its sequential schema migrations; startup rejects
+  unknown versions or invalid paths, atomically persists each mutation, and
+  reconciles active jobs after process replacement.
 - Process ownership remains explicit: the Rust core is the detached POSIX
   process-group leader and the worker/GJC descendants stay attached. On Windows,
   the existing live-owner guard creates the Rust core atomically inside a
@@ -39,8 +44,8 @@ Implementation progress:
 - Source builds require the pinned Rust toolchain. Server release artifacts carry
   the host-native core executable and require no installed Rust toolchain.
 - Claude, Codex, Cursor, and OpenCode execution and watcher paths remain
-  unchanged. Durable persistence, PTY, Git/worktree, and SQLite migration remain
-  in Checkpoint C.
+  unchanged. PTY, Git/worktree, and broader SQLite-backed native APIs remain in
+  Checkpoint C.
 
 ## Purpose
 
@@ -182,7 +187,7 @@ Extraction must preserve the existing observable GJC behavior before responsibil
 
 ### Checkpoint C: introduce the Rust core — in progress
 
-Slices 1 through 3 are complete:
+Slices 1 through 4 are complete:
 
 - Route only the GJC Node worker launch through the mandatory Rust process host.
 - Keep Protocol v1 opaque to Rust and authoritative in TypeScript.
@@ -195,13 +200,15 @@ Slices 1 through 3 are complete:
   deltas, initial scan, restart reconciliation, and every non-GJC Chokidar watcher.
 - Define the native in-memory job authority through a separate strict 64 KiB
   NDJSON API, without changing worker Protocol v1 or application persistence.
+- Persist the job authority in a separate Rust-owned database with bundled
+  SQLite and sequential fail-closed migrations.
 
 Remaining slices:
 
-- Move durable job persistence, PTY lifecycle, Git/worktree operations, and
-  SQLite ownership behind explicit Rust APIs. The state-machine authority,
-  crash reconciliation, fenced leases, and ordered idempotent replay semantics
-  are defined; persistence must preserve them.
+- Move PTY lifecycle, Git/worktree operations, and their required state behind
+  explicit Rust APIs. Durable job persistence now preserves the defined
+  state-machine, crash reconciliation, fenced lease, and ordered idempotent
+  replay semantics.
 
 ### Checkpoint D: thin desktop shell
 
@@ -239,6 +246,8 @@ These require implementation evidence or a separate approved plan:
 - Protocol v1's current source of truth is
   `server/gjc-worker-protocol.ts`; a TypeScript/Rust code-generation mechanism
   remains open for Checkpoint C.
-- Rust SQLite library and migration ownership.
+- **Resolved (2026-07-17):** Rust uses `rusqlite` with bundled SQLite. Durable
+  jobs use a separate daemon-data database whose schema and sequential
+  migrations are owned exclusively by Rust; Node must not open that database.
 - Electron-to-Tauri timing and supported desktop platforms.
 - Packaging strategy for any runtime still required by the GJC SDK.

@@ -25,8 +25,8 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         }
-        Ok(CliCommand::Jobs) => {
-            if jobs::run(io::stdin().lock(), io::stdout().lock()) {
+        Ok(CliCommand::Jobs { database }) => {
+            if jobs::run(&database, io::stdin().lock(), io::stdout().lock()) {
                 ExitCode::SUCCESS
             } else {
                 fail(JOBS_ERROR)

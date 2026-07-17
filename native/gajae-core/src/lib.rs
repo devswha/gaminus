@@ -16,7 +16,9 @@ pub enum Command {
     Watch {
         roots: Vec<PathBuf>,
     },
-    Jobs,
+    Jobs {
+        database: PathBuf,
+    },
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -47,9 +49,24 @@ where
             None => Err(ParseError),
         },
         Some(command) if command == "watch" => parse_watch_args(args),
-        Some(command) if command == "jobs" && args.next().is_none() => Ok(Command::Jobs),
+        Some(command) if command == "jobs" => parse_jobs_args(args),
         _ => Err(ParseError),
     }
+}
+
+fn parse_jobs_args<I>(args: I) -> Result<Command, ParseError>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    let mut args = args.into_iter();
+    if args.next().as_deref() != Some(std::ffi::OsStr::new("--database")) {
+        return Err(ParseError);
+    }
+    let database = args.next().map(PathBuf::from).ok_or(ParseError)?;
+    if !database.is_absolute() || args.next().is_some() {
+        return Err(ParseError);
+    }
+    Ok(Command::Jobs { database })
 }
 
 fn parse_watch_args<I>(args: I) -> Result<Command, ParseError>

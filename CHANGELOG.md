@@ -92,6 +92,11 @@ future server artifacts are published only through
   job state-machine authority, with fenced owner leases, explicit transitions,
   crash reconciliation to `interrupted`, and ordered idempotent event replay.
   Persistence, PTY, Git/worktree, SQLite, Protocol v1, and React remain unchanged.
+- Persisted the native job authority in a separate Rust-owned SQLite database
+  using bundled SQLite and sequential fail-closed migrations. State, fenced
+  lease generations, and ordered idempotent events survive core replacement;
+  startup reconciles active jobs to `interrupted`. Node does not access this
+  database, and Protocol v1 and React remain unchanged.
 
 ### Native server distribution and operations
 
