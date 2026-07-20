@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
 import { api } from '../../../../utils/api';
-
-import CommandMenu from './CommandMenu';
 import {
   filterCommands,
   getActiveSlashToken,
 } from '../../utils/slashCommandHelpers';
+
+import CommandMenu from './CommandMenu';
 
 type RelayStatus =
   | { kind: 'idle' }

@@ -109,7 +109,7 @@ function CompletionAlarmConsumer() {
   return (
     <div
       role="status"
-      className="fixed bottom-4 right-4 z-[9999] rounded-lg bg-green-600 px-4 py-2 text-sm text-white shadow-lg animate-in slide-in-from-bottom-2"
+      className="animate-in slide-in-from-bottom-2 fixed bottom-4 right-4 z-[9999] rounded-lg bg-green-600 px-4 py-2 text-sm text-white shadow-lg"
     >
       {toast.message}
     </div>

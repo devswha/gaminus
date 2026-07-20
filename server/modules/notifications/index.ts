@@ -3,7 +3,10 @@ export {
   createNotificationEvent,
   notifyUserIfEnabled,
   notifyLiveTurnEnded,
+  notifySessionCompleted,
 } from '@/modules/notifications/services/notification-orchestrator.service.js';
+export { createCompletionId } from '@/modules/notifications/services/completion-id.service.js';
+export { notifyRunTerminal } from '@/modules/notifications/services/run-terminal-notifier.service.js';
 export { startLiveTurnMonitor } from '@/modules/notifications/services/live-turn-monitor.service.js';
 export {
   registerDesktopNotificationClient,

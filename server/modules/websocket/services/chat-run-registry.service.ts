@@ -2,10 +2,9 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { createCompletionId, notifySessionCompleted } from '@/modules/notifications/index.js';
 import { generateDisplayName } from '@/modules/projects/index.js';
 import { ChatSessionWriter } from '@/modules/websocket/services/chat-session-writer.service.js';
-import { createCompletionId } from '@/modules/notifications/services/completion-id.service.js';
-import { notifySessionCompleted } from '@/modules/notifications/services/notification-orchestrator.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import type {
   LLMProvider,

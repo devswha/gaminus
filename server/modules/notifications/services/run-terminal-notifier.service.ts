@@ -1,7 +1,7 @@
 import { sessionsDb } from '@/modules/database/index.js';
 import { createCompletionId } from '@/modules/notifications/services/completion-id.service.js';
 import { notifySessionCompleted } from '@/modules/notifications/services/notification-orchestrator.service.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
+import { chatRunRegistry } from '@/modules/websocket/index.js';
 
 /**
  * Dispatches a provider runtime terminal notification only when that runtime is

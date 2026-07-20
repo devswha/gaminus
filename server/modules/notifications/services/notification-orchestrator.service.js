@@ -2,7 +2,7 @@ import webPush from 'web-push';
 
 import { notificationPreferencesDb, pushSubscriptionsDb, sessionsDb } from '@/modules/database/index.js';
 import { sendDesktopNotification as sendDesktopNotificationToClients } from '@/modules/notifications/services/desktop-notification-clients.service.js';
-import { broadcastCompletionAlarm } from '@/modules/websocket/services/websocket-state.service.js';
+import { broadcastCompletionAlarm } from '@/modules/websocket/index.js';
 
 const KIND_TO_PREF_KEY = {
   action_required: 'actionRequired',

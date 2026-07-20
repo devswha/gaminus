@@ -15,11 +15,11 @@ import {
   notifySessionCompleted,
 } from '@/modules/notifications/services/notification-orchestrator.service.js';
 import { notifyRunTerminal } from '@/modules/notifications/services/run-terminal-notifier.service.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import {
   broadcastCompletionAlarm,
+  chatRunRegistry,
   connectedClients,
-} from '@/modules/websocket/services/websocket-state.service.js';
+} from '@/modules/websocket/index.js';
 
 class FakeConnection {
   readyState = 1;
