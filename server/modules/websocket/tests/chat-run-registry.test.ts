@@ -58,6 +58,7 @@ test('live events are remapped to the app session id and sequenced', async () =>
       userId: 'user-1',
     });
     assert.ok(run);
+    assert.equal(run.writer.getAppSessionId(), 'app-run-1');
 
     run.writer.send({ kind: 'stream_delta', provider: 'claude', sessionId: 'provider-id-9', content: 'hello' });
     run.writer.send({ kind: 'text', provider: 'claude', sessionId: 'provider-id-9', content: 'hello world' });

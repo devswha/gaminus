@@ -46,11 +46,10 @@ import {
 import {
     spawnGjc,
     abortGjcSession,
-} from './gjc-cli.js';
-import {
     getPendingGjcApprovalsForSession,
     resolveGjcToolApproval,
-} from './gjc-sdk-bridge.js';
+    shutdownGjcWorker,
+} from './gjc-worker-client.js';
 import {
     stripAnsiSequences,
     normalizeDetectedUrl,
@@ -80,7 +79,7 @@ import { startEnabledPluginServers, stopAllPlugins, getPluginPort } from './util
 import { initializeDatabase, projectsDb, sessionsDb, userDb } from './modules/database/index.js';
 import { startLiveTurnMonitor } from './modules/notifications/index.js';
 import { configureWebPush } from './services/vapid-keys.js';
-import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
+import { validateApiKey, authenticateToken, authenticateWebSocket, AUTH_MODE } from './middleware/auth.js';
 import { c } from './utils/colors.js';
 import { evaluateExposure } from './utils/exposure-guard.js';
 
@@ -1592,11 +1591,14 @@ async function startServer() {
         await initializeDatabase();
 
         // Fail-closed exposure guard: refuse non-loopback listen while no
-        // account exists (first /register would be claimable network-wide).
+        // account exists (first /register would be claimable network-wide) or
+        // while GAJAE_AUTH=none leaves the port without any login at all.
         const exposure = evaluateExposure({
             host: HOST,
             hasUsers: userDb.hasUsers(),
             allowRemoteSetup: process.env.ALLOW_REMOTE_SETUP === '1',
+            authMode: AUTH_MODE,
+            allowUnauthRemote: process.env.GAJAE_ALLOW_UNAUTH_REMOTE === '1',
         });
         if (exposure.level === 'block') {
             console.error(`${c.warn('[SECURITY]')} ${exposure.message}`);
@@ -1654,8 +1656,26 @@ async function startServer() {
         });
 
         await closeSessionsWatcher();
-        // Clean up plugin processes on shutdown
+        let shutdownStarted = false;
         const shutdownRuntimeServices = async () => {
+            if (shutdownStarted) {
+                return;
+            }
+            shutdownStarted = true;
+
+            // Stop new HTTP/WebSocket work before permanently gating GJC starts.
+            server.close();
+            for (const client of wss.clients) {
+                client.terminate();
+            }
+            wss.close();
+            server.closeAllConnections?.();
+
+            try {
+                await shutdownGjcWorker();
+            } catch (err) {
+                console.error('[GJC Worker] Error stopping worker during shutdown:', err?.message || err);
+            }
             try {
                 await browserUseService.stopAllSessions();
             } catch (err) {

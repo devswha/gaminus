@@ -131,23 +131,57 @@ test('control and query use SDK v3 operation/input frames and correlate ids', as
   try {
     const client = await connectGjcSdkSession({ cwd, sessionId: SESSION_ID });
     assert.ok(client);
-    assert.deepEqual(await client.control('turn.abort', { reason: 'user' }), { aborted: true });
-    assert.deepEqual(await client.query('context.get'), {
+    assert.deepEqual(await client.control(
+      'turn.abort',
+      { reason: 'user' },
+      { confirm: true, idempotencyKey: 'abort-request' },
+    ), { aborted: true });
+    assert.deepEqual(await client.query('context.get', {}, 'cursor-1'), {
       items: [{ state: 'idle' }],
       complete: true,
       revision: '1',
     });
     assert.equal(requests.length, 2);
     assert.deepEqual(
-      { type: requests[0]?.type, operation: requests[0]?.operation, input: requests[0]?.input },
-      { type: 'control_request', operation: 'turn.abort', input: { reason: 'user' } },
+      {
+        type: requests[0]?.type,
+        operation: requests[0]?.operation,
+        input: requests[0]?.input,
+        confirm: requests[0]?.confirm,
+        idempotencyKey: requests[0]?.idempotencyKey,
+      },
+      {
+        type: 'control_request',
+        operation: 'turn.abort',
+        input: { reason: 'user' },
+        confirm: true,
+        idempotencyKey: 'abort-request',
+      },
     );
     assert.deepEqual(
-      { type: requests[1]?.type, query: requests[1]?.query, input: requests[1]?.input },
-      { type: 'query_request', query: 'context.get', input: {} },
+      {
+        type: requests[1]?.type,
+        query: requests[1]?.query,
+        input: requests[1]?.input,
+        cursor: requests[1]?.cursor,
+      },
+      { type: 'query_request', query: 'context.get', input: {}, cursor: 'cursor-1' },
     );
     assert.equal(typeof requests[0]?.id, 'string');
     assert.notEqual(requests[0]?.id, requests[1]?.id);
+    await assert.rejects(
+      client.control(''),
+      (error: unknown) => error instanceof GjcSdkClientError && error.code === 'protocol',
+    );
+    await assert.rejects(
+      client.query(''),
+      (error: unknown) => error instanceof GjcSdkClientError && error.code === 'protocol',
+    );
+    assert.throws(
+      () => client.reply('', {}),
+      (error: unknown) => error instanceof GjcSdkClientError && error.code === 'protocol',
+    );
+    assert.equal(requests.length, 2);
     assert.equal('token' in requests[0]!, false);
     await client.close();
   } finally {
@@ -210,6 +244,9 @@ test('reply uses the presentation id and token without exposing token to observe
   try {
     const client = await connectGjcSdkSession({ cwd, sessionId: SESSION_ID });
     assert.ok(client);
+    client.onFrame(() => {
+      throw new Error('observer failure');
+    });
     client.onFrame((frame) => observed.push(frame));
     client.reply('ask-1', { selected: [0] });
     await replyPromise;
@@ -293,6 +330,96 @@ test('connectGjcSdkSession returns null when discovery is missing', async () => 
       null,
     );
   } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+test('connectGjcSdkSession rejects invalid timeout configuration before discovery', async () => {
+  const cwd = await mkdtemp(path.join(os.tmpdir(), 'gjc-sdk-client-'));
+  try {
+    for (const options of [
+      { discoveryTimeoutMs: -1 },
+      { discoveryTimeoutMs: Number.NaN },
+      { requestTimeoutMs: 0 },
+      { requestTimeoutMs: Number.POSITIVE_INFINITY },
+    ]) {
+      await assert.rejects(
+        connectGjcSdkSession({ cwd, sessionId: SESSION_ID, ...options }),
+        (error: unknown) => error instanceof GjcSdkClientError && error.code === 'discovery',
+      );
+    }
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('timed out SDK requests are removed without poisoning later requests', async () => {
+  const server = await startServer((socket) => {
+    socket.send(JSON.stringify({ type: 'hello', protocolVersion: 3 }));
+    socket.on('message', (data) => {
+      const frame = JSON.parse(data.toString()) as Record<string, unknown>;
+      if (frame.type !== 'query_request') return;
+      socket.send(JSON.stringify({
+        type: 'query_response',
+        id: frame.id,
+        ok: true,
+        page: { items: [{ state: 'ready' }] },
+      }));
+    });
+  });
+  const cwd = await createDiscovery(endpointFor(server));
+  try {
+    const client = await connectGjcSdkSession({
+      cwd,
+      sessionId: SESSION_ID,
+      requestTimeoutMs: 50,
+    });
+    assert.ok(client);
+    await assert.rejects(
+      client.control('turn.abort'),
+      (error: unknown) => (
+        error instanceof GjcSdkClientError
+        && error.code === 'timeout'
+        && !error.message.includes(TOKEN)
+      ),
+    );
+    assert.deepEqual(await client.query('context.get'), {
+      items: [{ state: 'ready' }],
+    });
+    await client.close();
+  } finally {
+    await closeServer(server);
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test('invalid post-handshake frames fail closed and reject pending requests', async () => {
+  const observed: Array<Record<string, unknown>> = [];
+  const server = await startServer((socket) => {
+    socket.send(JSON.stringify({ type: 'hello', protocolVersion: 3 }));
+    socket.on('message', (data) => {
+      const frame = JSON.parse(data.toString()) as Record<string, unknown>;
+      if (frame.type === 'control_request') socket.send('{invalid-json');
+    });
+  });
+  const cwd = await createDiscovery(endpointFor(server));
+  try {
+    const client = await connectGjcSdkSession({
+      cwd,
+      sessionId: SESSION_ID,
+      requestTimeoutMs: 1_000,
+    });
+    assert.ok(client);
+    client.onFrame((frame) => observed.push(frame));
+    await assert.rejects(
+      client.control('turn.abort'),
+      (error: unknown) => error instanceof GjcSdkClientError && error.code === 'protocol',
+    );
+    assert.deepEqual(
+      observed.filter((frame) => frame.type === 'transport_closed'),
+      [{ type: 'transport_closed', reason: 'protocol' }],
+    );
+  } finally {
+    await closeServer(server);
     await rm(cwd, { recursive: true, force: true });
   }
 });

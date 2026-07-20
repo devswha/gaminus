@@ -33,6 +33,7 @@ test('SidebarLiveSection labels rows by tmux session name, title in tooltip', ()
       liveSessionLineage: new Set(['s-live']),
       liveSessionTmuxIds: new Map([['s-live', '$1']]),
       liveSessionKinds: new Map([['s-live', 'interactive']]),
+      liveSessionRunning: new Set<string>(),
       selectedSession: null,
       onSessionSelect,
     }),
@@ -53,6 +54,7 @@ test('SidebarLiveSection falls back to the conversation title when tmux name is 
       liveSessionLineage: new Set<string>(),
       liveSessionTmuxIds: new Map<string, string>(),
       liveSessionKinds: new Map<string, string>(),
+      liveSessionRunning: new Set<string>(),
       selectedSession: null,
       onSessionSelect,
     }),
@@ -69,6 +71,7 @@ test('SidebarLiveSection renders nothing when no session is live', () => {
       liveSessionLineage: new Set<string>(),
       liveSessionTmuxIds: new Map<string, string>(),
       liveSessionKinds: new Map<string, string>(),
+      liveSessionRunning: new Set<string>(),
       selectedSession: null,
       onSessionSelect,
     }),
@@ -85,6 +88,7 @@ test('SidebarLiveSection renders idle-gjc rows as 대기 (첫 대화 전 gjc pan
       liveSessionLineage: new Set(['idle-gjc:flask']),
       liveSessionTmuxIds: new Map([['idle-gjc:flask', '$9']]),
       liveSessionKinds: new Map([['idle-gjc:flask', 'interactive']]),
+      liveSessionRunning: new Set<string>(),
       selectedSession: null,
       onSessionSelect,
     }),
@@ -92,7 +96,8 @@ test('SidebarLiveSection renders idle-gjc rows as 대기 (첫 대화 전 gjc pan
   assert.ok(html.includes('>flask<'), 'labels the row by tmux session name');
   assert.ok(html.includes('대기'), 'idle rows carry the 대기 badge, not LIVE');
   assert.ok(!html.includes('LIVE'), 'no LIVE badge for a session with no transcript');
-  assert.ok(html.includes('아직 대화가 없습니다'), 'explains why it is not openable yet');
+  assert.ok(html.includes('아직 대화가 없습니다'), 'explains the pre-transcript state');
+  assert.ok(html.includes('첫 메시지 보내기'), 'idle lineage rows offer the first-message composer');
   assert.ok(html.includes('tmux 세션 flask 닫기'), 'lineage-grade idle rows keep the kill control');
 });
 
@@ -105,6 +110,7 @@ test('SidebarLiveSection badges a batch gjc row (foreground command is not gjc)'
       liveSessionLineage: new Set(['s-live']),
       liveSessionTmuxIds: new Map([['s-live', '$2']]),
       liveSessionKinds: new Map([['s-live', 'batch']]),
+      liveSessionRunning: new Set<string>(),
       selectedSession: null,
       onSessionSelect,
     }),
@@ -113,4 +119,25 @@ test('SidebarLiveSection badges a batch gjc row (foreground command is not gjc)'
   // but is visually distinguished from an interactive gjc TUI.
   assert.ok(html.includes('LIVE'), 'a batch row is still LIVE');
   assert.ok(html.includes('배치'), 'a batch gjc descendant carries the 배치 badge');
+});
+
+// Regression: a session whose transcript tail shows a turn in progress must be
+// visually distinct (green RUN) from one waiting for input (blue LIVE).
+test('SidebarLiveSection badges an in-progress turn as RUN, not LIVE', () => {
+  const html = renderToStaticMarkup(
+    createElement(SidebarLiveSection, {
+      projects: makeProjects(),
+      liveSessionIds: new Set(['s-live']),
+      liveSessionNames: new Map([['s-live', 'omg']]),
+      liveSessionLineage: new Set(['s-live']),
+      liveSessionTmuxIds: new Map([['s-live', '$1']]),
+      liveSessionKinds: new Map([['s-live', 'interactive']]),
+      liveSessionRunning: new Set(['s-live']),
+      selectedSession: null,
+      onSessionSelect,
+    }),
+  );
+  assert.ok(html.includes('>RUN<'), 'an in-progress turn carries the RUN badge');
+  assert.ok(!html.includes('>LIVE<'), 'the same row does not also show LIVE');
+  assert.ok(html.includes('emerald'), 'RUN is styled green, not blue');
 });

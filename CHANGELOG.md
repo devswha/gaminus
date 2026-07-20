@@ -4,12 +4,110 @@ All notable changes to Gajae App are documented in this file. Current and
 future server artifacts are published only through
 [GitHub Releases](https://github.com/devswha/gajae-app-v1/releases).
 
-## Unreleased
+## 1.0.0 (2026-07-17)
+
+### Versioning
+
+- Started Gajae App's own semantic version line at `1.0.0`, marking the current
+  MVP as the first stable cut. The inherited upstream `1.36.x` package version
+  is retired; upstream numbers below remain historical provenance only and are
+  never reused as Gajae App versions. Releases are cut from this line: the
+  release commit tags `v<version>`, publishes
+  `gajae-app-server-<version>-linux-x64-node22.tar.gz`, and converts this
+  `Unreleased` section into the dated version heading. The running server
+  reports its version at `/health`; the desktop shell keeps its independent
+  `desktopVersion` line.
+
+### Web interface
+
+- Removed the floating quick-settings edge handle on mobile; it overlapped chat
+  content on phones. Its toggles (show thinking, show raw parameters, send by
+  Ctrl+Enter) are now also available under Settings → Appearance on every
+  device, and voice remains under Settings → Voice.
+- Fixed the chat pane staying on its "Continue your conversation" empty state
+  even though the messages API had returned the transcript: the session store
+  signals changes by re-rendering with a stable object identity, but the
+  message window was memoized on that identity and never recomputed after the
+  fetch landed. Live tmux views and session history now render their messages.
+- Fixed "새 세션" spawn always failing with "작업 폴더는 홈 아래 실존 디렉터리만":
+  the control tower resolves the spawn cwd with expanduser against its own
+  process CWD, so the app now sends home-relative folders with an explicit
+  `~/` prefix instead of a bare relative path.
+- Fixed the 외부 CLI / Shell terminal rendering a black screen in no-login
+  mode: the shell WebSocket URL builder required a client-side localStorage
+  auth token that never exists under `GAJAE_AUTH=none`, so the socket was
+  never even attempted. WebSocket authentication is server-side (auth cookie
+  or implicit owner), so the client-side token gate is gone.
+- '대기' (idle, pre-transcript) gjc sessions in the sidebar now take their
+  first message directly from the UI: an inline composer relays it through the
+  control tower's send, shows an explicit promotion-wait state, and the live
+  poll promotes the row to LIVE once gjc opens its transcript. Send failures
+  and a promotion that never materializes fail closed back to an editable
+  composer with the reason.
+- Live sessions whose transcript tail shows a turn in progress (assistant
+  answering or tool loop running) now carry a green RUN badge instead of the
+  blue LIVE badge, so a working agent is distinguishable from one waiting for
+  input at a glance. Detection reads the same turn-terminator records the
+  live-turn notification monitor keys off; when the state is undeterminable
+  the badge stays LIVE (fail-safe).
+
+### Authentication
+
+- Login is no longer required by default (`GAJAE_AUTH=none`): every request and
+  WebSocket upgrade acts as the single implicit owner account, and the login,
+  registration, and setup screens are skipped. `GAJAE_AUTH=password` restores
+  the original single-account JWT/cookie flow unchanged.
+- The fail-closed exposure guard now refuses to start an unauthenticated server
+  on a non-loopback bind; `GAJAE_ALLOW_UNAUTH_REMOTE=1` downgrades that to a
+  loud warning for trusted private networks (VPN/tailnet). Loopback binds are
+  unaffected.
+- `/api/auth/login` and `/api/auth/register` return 404 while authentication is
+  disabled; `/api/auth/status` reports the active `authMode`.
+
+### Source development
+
+- Added Node.js 24.15.0+ support for dependency installation, development,
+  tests, and builds while retaining Node.js 22.22.2+ compatibility. Production
+  server artifacts remain pinned to the Node.js 22 line.
+- Completed GJC worker Checkpoints A and B: GJC CLI/SDK execution now runs
+  behind one supervised Node/TypeScript Protocol v1 worker with strict bounded
+  NDJSON, immutable run correlation, controlled-question mirroring, crash
+  restart, explicit failure reporting, graceful drain, detached POSIX process
+  groups, and atomic Windows kill-on-close Job Object ownership. Browser replay,
+  persistence, and notifications remain application
+  owned; Claude, Codex, Cursor, and OpenCode routing is unchanged.
+- Started GJC Checkpoint C with a mandatory minimal Rust process host.
+  GJC worker launches now follow application → `gajae-core` → Node worker while
+  preserving Protocol v1 bytes, browser behavior, and existing application
+  state ownership. Source verification builds/tests the pinned Rust toolchain;
+  server artifacts include and smoke the native executable without requiring
+  Rust on the installed host.
+- Added the second Checkpoint C slice: GJC persisted and live transcript roots
+  are now watched by a parent-owned native Rust process with strict bounded
+  events, canonical target containment, queue limits, cancellable graceful drain,
+  failure restart with GJC-only reconciliation, and no Node fallback. Existing
+  TypeScript indexing/database/browser behavior and all non-GJC Chokidar watchers
+  are unchanged.
+- Added the next Checkpoint C slice: `gajae-core jobs` is the single in-memory
+  job state-machine authority, with fenced owner leases, explicit transitions,
+  crash reconciliation to `interrupted`, and ordered idempotent event replay.
+  Persistence, PTY, Git/worktree, SQLite, Protocol v1, and React remain unchanged.
+- Persisted the native job authority in a separate Rust-owned SQLite database
+  using bundled SQLite and sequential fail-closed migrations. State, fenced
+  lease generations, and ordered idempotent events survive core replacement;
+  startup reconciles active jobs to `interrupted`. Node does not access this
+  database, and Protocol v1 and React remain unchanged.
+- Added a native single-child PTY lifecycle API with direct no-shell launch,
+  bounded base64 input/output, validated resize, deterministic exit reporting,
+  stdin-EOF cleanup, and explicit shutdown. The existing browser shell remains
+  on its unchanged Node path for this incremental slice.
 
 ### Native server distribution and operations
 
 - Established the Linux x86_64, glibc 2.35+, Node.js 22 server artifact:
-  `gajae-app-server-<version>-linux-x64-node22.tar.gz`.
+  `gajae-app-server-<version>-linux-x64-node22.tar.gz`. Release builds now
+  require a glibc 2.35 builder and audit the Rust core plus rebuilt native
+  modules for GLIBC symbol compatibility before archiving.
 - Established `~/.local/share/gajae-app` as the source-review checkout and
   `~/.gajae-app` as the runtime, release, and persistent-data root.
 - Established the per-user `gajae-app.service`, atomic release cutover, and

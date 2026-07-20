@@ -8,6 +8,7 @@ import { createCompleteMessage, readObjectRecord } from '@/shared/utils.js';
 
 type ChatSessionWriterOptions = {
   connection: RealtimeClientConnection;
+  appSessionId: string;
   userId: string | number | null;
   provider: LLMProvider;
   /** Provider-native id when resuming an existing session, otherwise null. */
@@ -133,6 +134,9 @@ export class ChatSessionWriter {
     return this.providerSessionId;
   }
 
+  getAppSessionId(): string {
+    return this.options.appSessionId;
+  }
   setAbortHandle(abortHandle: string): void {
     this.abortHandle = abortHandle;
   }

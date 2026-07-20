@@ -7,6 +7,7 @@ import {
   isValidSpawnName,
   classifySpawnResponse,
   classifyKillResponse,
+  normalizeSpawnCwd,
 } from '@/modules/providers/services/live-send.service.js';
 
 test('isValidTmuxName accepts simple session tokens, rejects unsafe ones', () => {
@@ -54,6 +55,18 @@ test('classifySpawnResponse: 2xx ok, 409 conflict, 4xx failure (all reachable)',
   const failed = classifySpawnResponse(400, 'cwd must be under $HOME');
   assert.equal(failed.ok, false);
   assert.equal(failed.conflict, false);
+});
+
+// Regression: the tower resolves cwd with expanduser + realpath, so a bare
+// HOME-relative value ("workspace/x") resolved against the tower's own process
+// CWD (not necessarily $HOME) and every spawn was rejected with "not an
+// existing directory under home". The proxy must send an explicit "~/" prefix.
+test('normalizeSpawnCwd makes home-relative paths explicit and passes the rest through', () => {
+  assert.equal(normalizeSpawnCwd('workspace/my-proj'), '~/workspace/my-proj');
+  assert.equal(normalizeSpawnCwd('  workspace/my-proj '), '~/workspace/my-proj');
+  assert.equal(normalizeSpawnCwd('~/workspace/my-proj'), '~/workspace/my-proj');
+  assert.equal(normalizeSpawnCwd('~'), '~');
+  assert.equal(normalizeSpawnCwd('/home/user/workspace'), '/home/user/workspace');
 });
 
 test('classifyKillResponse: 2xx ok, 403 protected, 422 unknown (all reachable)', () => {

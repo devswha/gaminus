@@ -252,6 +252,7 @@ export const chatRunRegistry = {
     };
 
     run.writer = new ChatSessionWriter({
+      appSessionId: input.appSessionId,
       connection: input.connection,
       userId: input.userId,
       provider: input.provider,

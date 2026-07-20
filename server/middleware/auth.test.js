@@ -8,7 +8,8 @@ import {
   getRequestToken,
   isTokenVersionValid,
   parseCookieHeader,
-  parseStoredTokenVersion
+  parseStoredTokenVersion,
+  resolveAuthMode
 } from './auth.js';
 
 test('parses the same-origin auth cookie without corrupting encoded values', () => {
@@ -79,4 +80,23 @@ test('persisted token versions reject missing, malformed, and unsafe values', ()
   assert.equal(parseStoredTokenVersion(String(Number.MAX_SAFE_INTEGER + 1)), null);
   assert.equal(parseStoredTokenVersion('0'), 0);
   assert.equal(parseStoredTokenVersion('42'), 42);
+});
+
+test('auth mode resolution: no login unless GAJAE_AUTH=password is explicit', () => {
+  assert.equal(resolveAuthMode(undefined), 'none');
+  assert.equal(resolveAuthMode(''), 'none');
+  assert.equal(resolveAuthMode('none'), 'none');
+  assert.equal(resolveAuthMode('PASSWORD'), 'none');
+  assert.equal(resolveAuthMode('anything-else'), 'none');
+  assert.equal(resolveAuthMode('password'), 'password');
+});
+
+test('websocket upgrades authenticate as the implicit owner when auth is disabled', () => {
+  // Mirrors authenticateWebSocket('none' mode): no cookie, no bearer — still a user.
+  const dependencies = {
+    authenticateWebSocket: () => ({ userId: 1, username: 'owner' })
+  };
+  const request = { url: '/ws', headers: {} };
+  assert.equal(verifyWebSocketClient({ req: request }, dependencies), true);
+  assert.deepEqual(request.user, { userId: 1, username: 'owner' });
 });
