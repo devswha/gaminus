@@ -25,10 +25,9 @@ import { providerModelsService } from './modules/providers/services/provider-mod
 import { resolveClaudeCodeExecutablePath } from './shared/claude-cli-path.js';
 import {
   createNotificationEvent,
-  notifyRunFailed,
-  notifyRunStopped,
   notifyUserIfEnabled
 } from './services/notification-orchestrator.js';
+import { notifyRunTerminal } from './modules/notifications/services/run-terminal-notifier.service.js';
 import { sessionsService } from './modules/providers/services/sessions.service.js';
 import { providerAuthService } from './modules/providers/services/provider-auth.service.js';
 import { createCompleteMessage, createNormalizedMessage } from './shared/utils.js';
@@ -685,12 +684,12 @@ async function queryClaudeSDK(command, options = {}, ws) {
     if (!wasAborted) {
       ws.send(createCompleteMessage({ provider: 'claude', sessionId: capturedSessionId || sessionId || null, exitCode: 0 }));
     }
-    notifyRunStopped({
+    notifyRunTerminal({
       userId: ws?.userId || null,
       provider: 'claude',
       sessionId: capturedSessionId || sessionId || null,
       sessionName: sessionSummary,
-      stopReason: wasAborted ? 'aborted' : 'completed'
+      stopReason: 'stop'
     });
     // Complete
 
@@ -718,12 +717,12 @@ async function queryClaudeSDK(command, options = {}, ws) {
     // Send error to WebSocket, then the terminal complete
     ws.send(createNormalizedMessage({ kind: 'error', content: errorContent, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
     ws.send(createCompleteMessage({ provider: 'claude', sessionId: capturedSessionId || sessionId || null, exitCode: 1 }));
-    notifyRunFailed({
+    notifyRunTerminal({
       userId: ws?.userId || null,
       provider: 'claude',
       sessionId: capturedSessionId || sessionId || null,
       sessionName: sessionSummary,
-      error
+      stopReason: 'error'
     });
   }
 }

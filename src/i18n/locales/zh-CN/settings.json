@@ -99,6 +99,11 @@
   "notifications": {
     "title": "通知",
     "description": "控制你希望接收的通知事件。",
+    "alarm": {
+      "title": "任务完成提醒",
+      "description": "任务完成时接收提醒。",
+      "enabled": "已启用"
+    },
     "webPush": {
       "title": "Web 推送通知",
       "enable": "启用推送通知",

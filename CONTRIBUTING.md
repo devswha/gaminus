@@ -4,8 +4,8 @@ Thanks for your interest in contributing to Gajae App! Before you start, please 
 
 ## Before You Start
 
-- **Search first.** Check [existing issues](https://github.com/devswha/gajae-app/issues) and [pull requests](https://github.com/devswha/gajae-app/pulls) to avoid duplicating work.
-- **Discuss first** for new features. Open an [issue](https://github.com/devswha/gajae-app/issues/new) to discuss your idea before investing time in implementation. We may already have plans or opinions on how it should work.
+- **Search first.** Check [existing issues](https://github.com/devswha/gajae-app-v1/issues) and [pull requests](https://github.com/devswha/gajae-app-v1/pulls) to avoid duplicating work.
+- **Discuss first** for new features. Open an [issue](https://github.com/devswha/gajae-app-v1/issues/new) to discuss your idea before investing time in implementation. We may already have plans or opinions on how it should work.
 - **Bug fixes are always welcome.** If you spot a bug, feel free to open a PR directly.
 
 ## Prerequisites
@@ -16,7 +16,7 @@ Thanks for your interest in contributing to Gajae App! Before you start, please 
 
 ## Getting Started
 
-1. Fork the [repository](https://github.com/devswha/gajae-app).
+1. Fork the [repository](https://github.com/devswha/gajae-app-v1).
 2. Clone your fork:
    ```bash
    git clone https://github.com/<your-username>/gajae-app.git

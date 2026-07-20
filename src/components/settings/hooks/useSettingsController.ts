@@ -8,6 +8,11 @@ import {
   DEFAULT_CODE_EDITOR_SETTINGS,
   DEFAULT_CURSOR_PERMISSIONS,
 } from '../constants/constants';
+import {
+  createDefaultNotificationPreferences,
+  normalizeNotificationPreferences,
+  toNotificationPreferencesPayload,
+} from '../utils/notificationPreferences';
 import type {
   AgentProvider,
   ClaudePermissionsState,
@@ -103,41 +108,6 @@ const createEmptyCursorPermissions = (): CursorPermissionsState => ({
   ...DEFAULT_CURSOR_PERMISSIONS,
 });
 
-const createDefaultNotificationPreferences = (): NotificationPreferencesState => ({
-  channels: {
-    inApp: true,
-    webPush: false,
-    desktop: false,
-    sound: true,
-  },
-  events: {
-    actionRequired: true,
-    stop: true,
-    liveStop: true,
-    error: true,
-  },
-});
-
-const normalizeNotificationPreferences = (
-  preferences?: Partial<NotificationPreferencesState> | null,
-): NotificationPreferencesState => {
-  const defaults = createDefaultNotificationPreferences();
-
-  return {
-    channels: {
-      inApp: preferences?.channels?.inApp ?? defaults.channels.inApp,
-      webPush: preferences?.channels?.webPush ?? defaults.channels.webPush,
-      desktop: preferences?.channels?.desktop ?? defaults.channels.desktop,
-      sound: preferences?.channels?.sound ?? defaults.channels.sound,
-    },
-    events: {
-      actionRequired: preferences?.events?.actionRequired ?? defaults.events.actionRequired,
-      stop: preferences?.events?.stop ?? defaults.events.stop,
-      liveStop: preferences?.events?.liveStop ?? defaults.events.liveStop,
-      error: preferences?.events?.error ?? defaults.events.error,
-    },
-  };
-};
 
 export function useSettingsController({ isOpen, initialTab }: UseSettingsControllerArgs) {
   const { isDarkMode, toggleDarkMode } = useTheme() as ThemeContextValue;
@@ -272,7 +242,7 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
 
       const notificationResponse = await authenticatedFetch('/api/settings/notification-preferences', {
         method: 'PUT',
-        body: JSON.stringify(notificationPreferences),
+        body: JSON.stringify(toNotificationPreferencesPayload(notificationPreferences)),
       });
       if (!notificationResponse.ok) {
         throw new Error('Failed to save notification preferences');

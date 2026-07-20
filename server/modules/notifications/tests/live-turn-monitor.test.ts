@@ -43,12 +43,16 @@ test('findAssistantTurnEnds tolerates a partial trailing line', () => {
 function makeHarness() {
   const files = new Map<string, string>();
   const notifications: Array<{ sessionId: string; tmuxName: string | null; stopReason: string }> = [];
+  const completionIds: string[] = [];
   let sessions: Array<{ id: string; tmuxName: string | null; claim: 'lineage' | 'cwd' | null }> = [];
   let transcriptPaths = new Map<string, string>();
 
   const monitor = createLiveTurnMonitor({
     getDetailed: async () => ({ sessions, transcriptPaths }),
-    notify: ({ sessionId, tmuxName, stopReason }) => notifications.push({ sessionId, tmuxName, stopReason }),
+    notify: ({ sessionId, tmuxName, stopReason, completionId }) => {
+      notifications.push({ sessionId, tmuxName, stopReason });
+      completionIds.push(completionId);
+    },
     getUserId: () => 1,
     statSize: async (path) => {
       const content = files.get(path);
@@ -62,6 +66,7 @@ function makeHarness() {
     monitor,
     files,
     notifications,
+    completionIds,
     setLive(rows: typeof sessions, paths: Record<string, string>) {
       sessions = rows;
       transcriptPaths = new Map(Object.entries(paths));
@@ -138,4 +143,20 @@ test('monitor FINAL SWEEP catches a short turn whose fd closed before the next t
 
   assert.deepEqual(h.notifications, [{ sessionId: 's3', tmuxName: 'notifyprobe', stopReason: 'stop' }]);
   assert.equal(h.monitor.cursorCount(), 0, 'cursor freed after the final sweep');
+});
+test('monitor derives completion ids from transcript path and consumed byte offset', async () => {
+  const h = makeHarness();
+  h.files.set('/t/completion.jsonl', '');
+  h.setLive([row('s4', 'completion', 'lineage')], { s4: '/t/completion.jsonl' });
+  await h.monitor.tick();
+
+  h.files.set('/t/completion.jsonl', `${assistantLine('stop')}\n`);
+  await h.monitor.tick();
+  const firstCompletionId = h.completionIds[0];
+
+  h.files.set('/t/completion.jsonl', `${assistantLine('stop')}\n${assistantLine('stop')}\n`);
+  await h.monitor.tick();
+
+  assert.match(firstCompletionId ?? '', /^[a-f0-9]{64}$/);
+  assert.notEqual(h.completionIds[1], firstCompletionId);
 });

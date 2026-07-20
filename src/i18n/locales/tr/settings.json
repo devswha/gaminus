@@ -99,6 +99,11 @@
   "notifications": {
     "title": "Bildirimler",
     "description": "Hangi bildirim etkinliklerini alacağını kontrol et.",
+    "alarm": {
+      "title": "Görev tamamlama alarmları",
+      "description": "Bir görev tamamlandığında alarm alın.",
+      "enabled": "Etkin"
+    },
     "webPush": {
       "title": "Web Push Bildirimleri",
       "enable": "Push Bildirimlerini Etkinleştir",

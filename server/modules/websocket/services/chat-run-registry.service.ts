@@ -1,8 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { generateDisplayName } from '@/modules/projects/index.js';
 import { ChatSessionWriter } from '@/modules/websocket/services/chat-session-writer.service.js';
+import { createCompletionId } from '@/modules/notifications/services/completion-id.service.js';
+import { notifySessionCompleted } from '@/modules/notifications/services/notification-orchestrator.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import type {
   LLMProvider,
@@ -27,6 +30,8 @@ type ChatRunStatus = 'running' | 'completed';
  *   can replay exactly the events it missed via `chat.subscribe`.
  */
 type ChatRun = {
+  runId: string;
+  completionId: string | null;
   appSessionId: string;
   provider: LLMProvider;
   providerSessionId: string | null;
@@ -149,6 +154,17 @@ function decorateAndRecordEvent(run: ChatRun, message: NormalizedMessage): Norma
     outbound.actualSessionId = run.appSessionId;
     run.status = 'completed';
     run.completedAt = Date.now();
+    run.completionId = createCompletionId(run.runId, run.lastSeq);
+    outbound.completionId = run.completionId;
+    if (!message.aborted) {
+      notifySessionCompleted({
+        userId: run.writer.userId == null ? null : Number(run.writer.userId),
+        provider: run.provider,
+        sessionId: run.appSessionId,
+        stopReason: message.exitCode === 0 ? 'stop' : 'error',
+        completionId: run.completionId,
+      });
+    }
     evictRunLater(run.appSessionId);
   }
 
@@ -222,6 +238,8 @@ export const chatRunRegistry = {
     }
 
     const run: ChatRun = {
+      runId: randomUUID(),
+      completionId: null,
       appSessionId: input.appSessionId,
       provider: input.provider,
       providerSessionId: input.providerSessionId,

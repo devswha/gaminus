@@ -7,6 +7,7 @@
 import { getConnection } from '@/modules/database/connection.js';
 
 type NotificationPreferences = {
+  alarmEnabled: boolean;
   channels: {
     inApp: boolean;
     webPush: boolean;
@@ -24,6 +25,7 @@ type NotificationPreferences = {
 };
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  alarmEnabled: true,
   channels: {
     inApp: false,
     webPush: false,
@@ -49,6 +51,7 @@ function normalizeNotificationPreferences(value: unknown): NotificationPreferenc
   ) as Record<string, boolean>;
 
   return {
+    alarmEnabled: source.alarmEnabled !== false,
     channels: {
       ...extraChannels,
       inApp: source.channels?.inApp === true,

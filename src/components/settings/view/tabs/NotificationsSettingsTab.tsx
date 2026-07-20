@@ -52,6 +52,35 @@ export default function NotificationsSettingsTab({
         </div>
         <p className="text-sm text-muted-foreground">{t('notifications.description')}</p>
       </div>
+      <div className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <h4 className="font-medium text-foreground">
+              {t('notifications.alarm.title', { defaultValue: '작업 완료 알람' })}
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              {t('notifications.alarm.description', {
+                defaultValue: '작업이 완료되었을 때 알림을 받습니다.',
+              })}
+            </p>
+          </div>
+
+          <label className="flex shrink-0 items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={notificationPreferences.alarmEnabled}
+              onChange={(event) =>
+                onNotificationPreferencesChange({
+                  ...notificationPreferences,
+                  alarmEnabled: event.target.checked,
+                })
+              }
+              className="h-4 w-4"
+            />
+            {t('notifications.alarm.enabled', { defaultValue: 'Enabled' })}
+          </label>
+        </div>
+      </div>
 
       {isDesktop ? (
         <div className="space-y-4 rounded-lg border border-border bg-card p-4">

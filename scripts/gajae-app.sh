@@ -2,7 +2,7 @@
 # Repository-owned lifecycle manager for a local Gajae App deployment.
 set -euo pipefail
 
-readonly DEFAULT_REPOSITORY="https://github.com/devswha/gajae-app.git"
+readonly DEFAULT_REPOSITORY="https://github.com/devswha/gajae-app-v1.git"
 readonly DEFAULT_REF="main"
 readonly SERVICE_NAME="gajae-app.service"
 
@@ -115,18 +115,37 @@ state_value() {
   done < "$STATE_FILE"
   return 1
 }
+is_stable_semver_tag() {
+  [[ "$1" =~ ^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]
+}
+
+current_release_tag() {
+  local update_state release_tag ref
+  update_state="$(state_value update_state || true)"
+  release_tag="$(state_value release_tag || true)"
+  ref="$(state_value ref || true)"
+
+  if is_stable_semver_tag "$release_tag"; then
+    printf '%s' "$release_tag"
+  elif [[ "$update_state" =~ ^(current|rolled_back)$ ]] && is_stable_semver_tag "$ref"; then
+    printf '%s' "$ref"
+  fi
+}
+
 
 write_state() {
-  local update_state="$1" active_root="$2" sha="$3" previous_root="$4" previous_sha="$5" failure="${6:-}"
+  local update_state="$1" active_root="$2" sha="$3" previous_root="$4" previous_sha="$5" failure="${6:-}" release_tag="${7:-$REF}"
   mkdir -p "$STATE_DIR"
   local temporary="$STATE_FILE.$$.tmp"
   {
     printf 'ref=%s\n' "$REF"
+    printf 'release_tag=%s\n' "$release_tag"
     printf 'active_root=%s\n' "$active_root"
     printf 'sha=%s\n' "$sha"
     printf 'previous_root=%s\n' "$previous_root"
     printf 'previous_sha=%s\n' "$previous_sha"
     printf 'update_state=%s\n' "$update_state"
+    printf 'operation_id=%s\n' "${GAJAE_APP_OPERATION_ID:-}"
     printf 'failure=%s\n' "$failure"
     printf 'updated_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   } > "$temporary"
@@ -393,20 +412,20 @@ restore_rollback_unit() {
 }
 
 activate_candidate() {
-  local previous_root="$1" previous_sha="$2" candidate_root="$3" candidate_sha="$4" rollback_unit
+  local previous_root="$1" previous_sha="$2" candidate_root="$3" candidate_sha="$4" previous_release_tag="$5" rollback_unit
   rollback_unit="$STATE_DIR/rollback-unit-$(date -u +%Y%m%dT%H%M%SZ).$$"
   save_rollback_unit "$rollback_unit"
   record_rollback_metadata "$previous_root" "$previous_sha" "$rollback_unit"
-  write_state preparing "$previous_root" "$previous_sha" "$previous_root" "$previous_sha" ""
+  write_state preparing "$previous_root" "$previous_sha" "$previous_root" "$previous_sha" "" "$previous_release_tag"
   install_unit "$candidate_root" >/dev/null
   restart_service
   if ! wait_for_health "$candidate_root"; then
     warn "candidate health check failed; restoring the prior service unit and deployment"
     restore_rollback_unit "$rollback_unit"
-    write_state rolled_back "$previous_root" "$previous_sha" "$previous_root" "$previous_sha" health_check_failed
+    write_state rolled_back "$previous_root" "$previous_sha" "$previous_root" "$previous_sha" health_check_failed "$previous_release_tag"
     die "candidate did not become healthy; prior deployment was restored"
   fi
-  write_state current "$candidate_root" "$candidate_sha" "$previous_root" "$previous_sha" ""
+  write_state current "$candidate_root" "$candidate_sha" "$previous_root" "$previous_sha" "" "$REF"
 }
 
 acquire_lock() {
@@ -469,10 +488,10 @@ install_command() {
 
   local staged_root
   if ! staged_root="$(prepare_candidate "$INSTALL_DIR" "$candidate_sha")"; then
-    write_state failed "$current_root" "$current_sha" "$(state_value previous_root || true)" "$(state_value previous_sha || true)" build_failed
+    write_state failed "$current_root" "$current_sha" "$(state_value previous_root || true)" "$(state_value previous_sha || true)" build_failed "$(current_release_tag)"
     die "candidate build failed; the existing service was not restarted"
   fi
-  activate_candidate "$current_root" "$current_sha" "$staged_root" "$candidate_sha"
+  activate_candidate "$current_root" "$current_sha" "$staged_root" "$candidate_sha" "$(current_release_tag)"
   printf 'Installed %s at %s (%s)\n' "$REF" "$staged_root" "$candidate_sha"
 }
 
@@ -493,10 +512,10 @@ update_command() {
     return
   fi
   if ! staged_root="$(prepare_candidate "$INSTALL_DIR" "$candidate_sha")"; then
-    write_state failed "$current_root" "$current_sha" "$(state_value previous_root || true)" "$(state_value previous_sha || true)" build_failed
+    write_state failed "$current_root" "$current_sha" "$(state_value previous_root || true)" "$(state_value previous_sha || true)" build_failed "$(current_release_tag)"
     die "candidate build failed; the existing service was not restarted"
   fi
-  activate_candidate "$current_root" "$current_sha" "$staged_root" "$candidate_sha"
+  activate_candidate "$current_root" "$current_sha" "$staged_root" "$candidate_sha" "$(current_release_tag)"
   printf 'Updated %s to %s\n' "$REF" "$candidate_sha"
 }
 
@@ -547,6 +566,9 @@ status_command() {
   return "$exit_code"
 }
 
+if [[ "${GAJAE_APP_SOURCE_ONLY:-}" == 1 ]]; then
+  return 0 2>/dev/null || exit 0
+fi
 require_prerequisites
 validate_ref
 [[ -z "$PORT" ]] || validate_port "$PORT"

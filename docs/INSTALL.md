@@ -3,7 +3,7 @@
 Gajae App is installed from a verified GitHub Release artifact. The only
 supported artifact source is:
 
-<https://github.com/devswha/gajae-app/releases>
+<https://github.com/devswha/gajae-app-v1/releases>
 
 The first supported target is the Linux x86_64 server artifact for Node.js 22
 and glibc 2.35 or newer. Do not use a package registry, container image,
@@ -15,8 +15,8 @@ installation.
 ```sh
 CHECKOUT="$HOME/.local/share/gajae-app"
 RUNTIME="$HOME/.gajae-app"
-REPOSITORY="https://github.com/devswha/gajae-app"
-RELEASES="https://github.com/devswha/gajae-app/releases"
+REPOSITORY="https://github.com/devswha/gajae-app-v1"
+RELEASES="https://github.com/devswha/gajae-app-v1/releases"
 
 # Required platform contract:
 test "$(uname -s)" = Linux

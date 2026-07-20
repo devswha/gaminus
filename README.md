@@ -9,7 +9,7 @@
   <a href="#first-run">First run</a> ·
   <a href="#daily-workflow">Daily workflow</a> ·
   <a href="docs/INSTALL.md">Production install</a> ·
-  <a href="https://github.com/devswha/gajae-app/issues">Issues</a>
+  <a href="https://github.com/devswha/gajae-app-v1/issues">Issues</a>
 </p>
 
 <div align="right"><i><b>English</b> · <a href="./README.ko.md">한국어</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.ru.md">Русский</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.zh-CN.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a></i></div>
@@ -42,8 +42,8 @@ Provider-specific models, effort controls, permission modes, session history, sk
 ### Start the web app from source
 
 ```bash
-git clone https://github.com/devswha/gajae-app.git
-cd gajae-app
+git clone https://github.com/devswha/gajae-app-v1.git
+cd gajae-app-v1
 npm ci
 npm run dev
 ```
@@ -120,7 +120,7 @@ The Electron app can register remote Gajae App servers. Remote targets require H
 
 Production is supported on Linux x86_64 with glibc 2.35 or newer, Node.js 22, and a user-level systemd service.
 
-Use an immutable `gajae-app-server-<version>-linux-x64-node22.tar.gz` artifact from [GitHub Releases](https://github.com/devswha/gajae-app/releases). A supported installation must:
+Use an immutable `gajae-app-server-<version>-linux-x64-node22.tar.gz` artifact from [GitHub Releases](https://github.com/devswha/gajae-app-v1/releases). A supported installation must:
 
 1. download a pinned version and its matching `.sha256` file;
 2. verify the checksum before extraction;
@@ -179,7 +179,7 @@ This runs the dependency audit, type checks, all test partitions, lint, identity
 - [Self-hosting and rollback](docs/SELF-HOST.md)
 - [Upstream provenance and selective intake](docs/UPSTREAM.md)
 - [Contributing](CONTRIBUTING.md)
-- [Issue tracker](https://github.com/devswha/gajae-app/issues)
+- [Issue tracker](https://github.com/devswha/gajae-app-v1/issues)
 
 ## License
 

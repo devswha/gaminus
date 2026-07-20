@@ -19,6 +19,7 @@ export class GjcSkillsProvider extends SkillsProvider {
       scope: 'project',
       rootDir: path.join(workspacePath, '.gjc', 'skills'),
       commandPrefix: '/',
+      commandForSkill: (name) => `/skill:${name}`,
     });
 
     // User-scoped skills live under the gjc agent home.
@@ -26,6 +27,7 @@ export class GjcSkillsProvider extends SkillsProvider {
       scope: 'user',
       rootDir: path.join(os.homedir(), '.gjc', 'agent', 'skills'),
       commandPrefix: '/',
+      commandForSkill: (name) => `/skill:${name}`,
     });
 
     return sources;

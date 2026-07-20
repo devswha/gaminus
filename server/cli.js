@@ -185,10 +185,10 @@ Environment Variables:
   ALLOW_REMOTE_SETUP  Set to 1 to allow first-run setup on a non-loopback HOST (trusted networks only)
 
 Documentation:
-  ${packageJson.homepage || 'https://github.com/devswha/gajae-app'}
+  ${packageJson.homepage || 'https://github.com/devswha/gajae-app-v1'}
 
 Report Issues:
-  ${packageJson.bugs?.url || 'https://github.com/devswha/gajae-app/issues'}
+  ${packageJson.bugs?.url || 'https://github.com/devswha/gajae-app-v1/issues'}
 `);
 }
 

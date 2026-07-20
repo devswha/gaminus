@@ -71,7 +71,7 @@ test('push payload uses the app session id when notified with a provider session
 
       assert.equal(sentPayloads.length, 1);
       assert.equal(sentPayloads[0]?.data?.sessionId, 'app-session-1');
-      assert.match(sentPayloads[0]?.data?.tag, /app-session-1/);
+      assert.equal(sentPayloads[0]?.data?.tag, sentPayloads[0]?.data?.completionId);
     });
   } finally {
     webPush.sendNotification = originalSendNotification;

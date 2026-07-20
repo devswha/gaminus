@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
+import { closeConnection, initializeDatabase, sessionsDb, userDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { connectedClients } from '@/modules/websocket/services/websocket-state.service.js';
 
@@ -29,6 +29,7 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
   closeConnection();
   process.env.DATABASE_PATH = databasePath;
   await initializeDatabase();
+  userDb.createUser('chat-run-registry', 'hash');
 
   try {
     await runTest();
@@ -105,12 +106,13 @@ test('complete marks the run finished and duplicate completes are dropped', asyn
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-3', 'codex', '/workspace/demo');
     const connection = new FakeConnection();
+    connectedClients.add(connection as never);
     const run = chatRunRegistry.startRun({
       appSessionId: 'app-run-3',
       provider: 'codex',
       providerSessionId: null,
       connection,
-      userId: null,
+      userId: 1,
     });
     assert.ok(run);
 
@@ -122,10 +124,66 @@ test('complete marks the run finished and duplicate completes are dropped', asyn
     assert.equal(completes.length, 1);
     assert.equal(completes[0]?.actualSessionId, 'app-run-3');
     assert.equal(chatRunRegistry.isProcessing('app-run-3'), false);
+    assert.match(run.completionId ?? '', /^[a-f0-9]{64}$/);
+    assert.equal(connection.frames.filter((frame) => frame.type === 'completion-alarm').length, 1);
 
     // completeRun is also a no-op once the run already completed.
     chatRunRegistry.completeRun('app-run-3', { exitCode: 1 });
     assert.equal(connection.frames.filter((frame) => frame.kind === 'complete').length, 1);
+    assert.equal(connection.frames.filter((frame) => frame.type === 'completion-alarm').length, 1);
+  });
+});
+test('aborted complete finishes the run without dispatching a completion alarm', async () => {
+  await withIsolatedDatabase(() => {
+    sessionsDb.createAppSession('app-run-aborted', 'codex', '/workspace/demo');
+    const connection = new FakeConnection();
+    connectedClients.add(connection as never);
+    const run = chatRunRegistry.startRun({
+      appSessionId: 'app-run-aborted',
+      provider: 'codex',
+      providerSessionId: null,
+      connection,
+      userId: 1,
+    });
+    assert.ok(run);
+
+    chatRunRegistry.completeRun('app-run-aborted', { exitCode: 0, aborted: true });
+
+    const completes = connection.frames.filter((frame) => frame.kind === 'complete');
+    assert.equal(completes.length, 1);
+    assert.equal(completes[0]?.aborted, true);
+    assert.match(completes[0]?.completionId as string, /^[a-f0-9]{64}$/);
+    assert.equal(chatRunRegistry.isProcessing('app-run-aborted'), false);
+    assert.equal(connection.frames.filter((frame) => frame.type === 'completion-alarm').length, 0);
+  });
+});
+test('each restarted run receives a distinct completion id', async () => {
+  await withIsolatedDatabase(() => {
+    sessionsDb.createAppSession('app-run-completion-id', 'codex', '/workspace/demo');
+    const connection = new FakeConnection();
+
+    const first = chatRunRegistry.startRun({
+      appSessionId: 'app-run-completion-id',
+      provider: 'codex',
+      providerSessionId: null,
+      connection,
+      userId: null,
+    });
+    assert.ok(first);
+    first.writer.send({ kind: 'complete', provider: 'codex', sessionId: 'native-first', exitCode: 0 });
+
+    const second = chatRunRegistry.startRun({
+      appSessionId: 'app-run-completion-id',
+      provider: 'codex',
+      providerSessionId: null,
+      connection,
+      userId: null,
+    });
+    assert.ok(second);
+    second.writer.send({ kind: 'complete', provider: 'codex', sessionId: 'native-second', exitCode: 0 });
+
+    assert.notEqual(first.runId, second.runId);
+    assert.notEqual(first.completionId, second.completionId);
   });
 });
 

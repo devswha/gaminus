@@ -98,6 +98,11 @@
   "notifications": {
     "title": "Notifiche",
     "description": "Controlla quali notifiche ricevere.",
+    "alarm": {
+      "title": "Avvisi di completamento attività",
+      "description": "Ricevi un avviso quando un'attività viene completata.",
+      "enabled": "Abilitato"
+    },
     "webPush": {
       "title": "Notifiche push web",
       "enable": "Abilita notifiche push",

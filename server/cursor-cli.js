@@ -1,7 +1,7 @@
 import crossSpawn from 'cross-spawn';
 
 import { appendImagesInputTag } from './shared/image-attachments.js';
-import { notifyRunFailed, notifyRunStopped } from './services/notification-orchestrator.js';
+import { notifyRunTerminal } from './modules/notifications/services/run-terminal-notifier.service.js';
 import { sessionsService } from './modules/providers/services/sessions.service.js';
 import { providerAuthService } from './modules/providers/services/provider-auth.service.js';
 import { providerModelsService } from './modules/providers/services/provider-models.service.js';
@@ -108,23 +108,12 @@ async function spawnCursor(command, options = {}, ws) {
         terminalNotificationSent = true;
 
         const finalSessionId = capturedSessionId || sessionId || processKey;
-        if (code === 0 && !error) {
-          notifyRunStopped({
-            userId: ws?.userId || null,
-            provider: 'cursor',
-            sessionId: finalSessionId,
-            sessionName: sessionSummary,
-            stopReason: 'completed'
-          });
-          return;
-        }
-
-        notifyRunFailed({
+        notifyRunTerminal({
           userId: ws?.userId || null,
           provider: 'cursor',
           sessionId: finalSessionId,
           sessionName: sessionSummary,
-          error: error || `Cursor CLI exited with code ${code}`
+          stopReason: code === 0 && !error ? 'stop' : 'error'
         });
       };
 

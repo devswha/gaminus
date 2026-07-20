@@ -40,6 +40,7 @@ const PROTECTED_FILE_HASHES = new Map([
 const LEGACY_TOKEN = ['cloud', 'cli'].join('');
 const LEGACY_COORDINATE = ['siteboon', 'claudecodeui'].join('/');
 const STALE_FORK_COORDINATE = ['devswha', 'claudecodeui'].join('/');
+const LEGACY_GAJAE_COORDINATE = ['devswha', 'gajae-app'].join('/');
 const UPSTREAM_NAME = `Cloud${'CLI'} UI`;
 const UPSTREAM_URL = `https://github.com/${LEGACY_COORDINATE}`;
 const UPSTREAM_LINEAGE = [
@@ -64,13 +65,23 @@ const LEGACY_MATCHERS = [
     label: 'legacy downstream fork coordinate',
     expression: new RegExp(STALE_FORK_COORDINATE, 'gi'),
   },
+  {
+    label: 'legacy Gajae App coordinate',
+    expression: new RegExp(`${LEGACY_GAJAE_COORDINATE}(?!-v1)`, 'gi'),
+  },
 ];
 const CHANGELOG_ALLOWANCES = [
   { matcher: LEGACY_MATCHERS[0], expected: 3 },
   { matcher: LEGACY_MATCHERS[1], expected: 0 },
   { matcher: LEGACY_MATCHERS[2], expected: 332 },
   { matcher: LEGACY_MATCHERS[3], expected: 0 },
+  { matcher: LEGACY_MATCHERS[4], expected: 0 },
 ];
+const HISTORICAL_PROVENANCE_ALLOWANCES = new Map([
+  ['artifacts/clean-repository-migration-report.json', [
+    { matcher: LEGACY_MATCHERS[4], expected: 1 },
+  ]],
+]);
 const DATED_MIGRATION_HISTORY = /^docs\/(?:history|migration)\/\d{4}-\d{2}-\d{2}(?:[-_][^/]+)?\.md$/i;
 
 const errors = [];
@@ -179,15 +190,20 @@ function validateProvenanceDocument(relativePath, text) {
   scanText(relativePath, text, [...nameRanges, ...urlRanges]);
 }
 
-function validateChangelog(text) {
-  for (const allowance of CHANGELOG_ALLOWANCES) {
-    validateExactCount(
-      'CHANGELOG.md',
-      allowance.matcher.label,
-      matchRanges(text, allowance.matcher.expression),
-      allowance.expected,
-    );
+function validateAllowedLegacyReferences(relativePath, text, allowances) {
+  const allowedRanges = [];
+
+  for (const allowance of allowances) {
+    const ranges = matchRanges(text, allowance.matcher.expression);
+    validateExactCount(relativePath, allowance.matcher.label, ranges, allowance.expected);
+    allowedRanges.push(...ranges);
   }
+
+  scanText(relativePath, text, allowedRanges);
+}
+
+function validateChangelog(text) {
+  validateAllowedLegacyReferences('CHANGELOG.md', text, CHANGELOG_ALLOWANCES);
 }
 
 function scanSpecialFile(relativePath, buffer) {
@@ -213,6 +229,11 @@ function scanSpecialFile(relativePath, buffer) {
     return;
   }
 
+  const provenanceAllowances = HISTORICAL_PROVENANCE_ALLOWANCES.get(relativePath);
+  if (provenanceAllowances) {
+    validateAllowedLegacyReferences(relativePath, text, provenanceAllowances);
+    return;
+  }
   if (relativePath === 'docs/UPSTREAM.md' || DATED_MIGRATION_HISTORY.test(relativePath)) {
     validateProvenanceDocument(relativePath, text);
     return;

@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import crossSpawn from 'cross-spawn';
 
 import { providerAuthService } from './modules/providers/services/provider-auth.service.js';
-import { notifyRunFailed, notifyRunStopped } from './services/notification-orchestrator.js';
+import { notifyRunTerminal } from './modules/notifications/services/run-terminal-notifier.service.js';
 import { createCompleteMessage, createNormalizedMessage } from './shared/utils.js';
 import { attachGjcSdkBridge } from './gjc-sdk-bridge.js';
 
@@ -309,23 +309,12 @@ function spawnGjc(message, options = {}, writer) {
 
       terminalNotificationSent = true;
       const finalSessionId = capturedSessionId || sessionId || processKey;
-      if (code === 0 && !error) {
-        notifyRunStopped({
-          userId: writer?.userId || null,
-          provider: PROVIDER,
-          sessionId: finalSessionId,
-          sessionName: sessionSummary,
-          stopReason: 'completed',
-        });
-        return;
-      }
-
-      notifyRunFailed({
+      notifyRunTerminal({
         userId: writer?.userId || null,
         provider: PROVIDER,
         sessionId: finalSessionId,
         sessionName: sessionSummary,
-        error: error || `gjc CLI exited with code ${code}`,
+        stopReason: code === 0 && !error ? 'stop' : 'error',
       });
     };
 

@@ -16,7 +16,7 @@
 import { Codex } from '@openai/codex-sdk';
 
 import { buildCodexInputItems, normalizeImageDescriptors } from './shared/image-attachments.js';
-import { notifyRunFailed, notifyRunStopped } from './services/notification-orchestrator.js';
+import { notifyRunTerminal } from './modules/notifications/services/run-terminal-notifier.service.js';
 import { sessionsService } from './modules/providers/services/sessions.service.js';
 import { providerAuthService } from './modules/providers/services/provider-auth.service.js';
 import { providerModelsService } from './modules/providers/services/provider-models.service.js';
@@ -345,12 +345,12 @@ export async function queryCodex(command, options = {}, ws) {
 
       if (event.type === 'turn.failed' && !terminalFailure) {
         terminalFailure = event.error || new Error('Turn failed');
-        notifyRunFailed({
+        notifyRunTerminal({
           userId: ws?.userId || null,
           provider: 'codex',
           sessionId: capturedSessionId || sessionId || null,
           sessionName: sessionSummary,
-          error: terminalFailure
+          stopReason: 'error'
         });
       }
 
@@ -375,12 +375,12 @@ export async function queryCodex(command, options = {}, ws) {
         exitCode: terminalFailure ? 1 : 0,
       }));
       if (!terminalFailure) {
-        notifyRunStopped({
+        notifyRunTerminal({
           userId: ws?.userId || null,
           provider: 'codex',
           sessionId: capturedSessionId || sessionId || null,
           sessionName: sessionSummary,
-          stopReason: 'completed'
+          stopReason: 'stop'
         });
       }
     }
@@ -408,12 +408,12 @@ export async function queryCodex(command, options = {}, ws) {
         exitCode: 1,
       }));
       if (!terminalFailure) {
-        notifyRunFailed({
+        notifyRunTerminal({
           userId: ws?.userId || null,
           provider: 'codex',
           sessionId: capturedSessionId || sessionId || null,
           sessionName: sessionSummary,
-          error
+          stopReason: 'error'
         });
       }
     }

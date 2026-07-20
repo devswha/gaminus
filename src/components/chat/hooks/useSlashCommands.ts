@@ -4,6 +4,13 @@ import type { Dispatch, KeyboardEvent, RefObject, SetStateAction } from 'react';
 import { authenticatedFetch } from '../../../utils/api';
 import { safeLocalStorage } from '../utils/chatStorage';
 import type { LLMProvider, Project } from '../../../types/app';
+import {
+  dedupeProviderSkills,
+  filterSlashCommands,
+  insertSlashCommand,
+  mapSkillToSlashCommand,
+  type ProviderSkill,
+} from '../utils/slashCommandHelpers';
 
 const COMMAND_QUERY_DEBOUNCE_MS = 150;
 
@@ -26,15 +33,6 @@ interface UseSlashCommandsOptions {
   onExecuteCommand: (command: SlashCommand, rawInput?: string) => void | Promise<void>;
 }
 
-type ProviderSkill = {
-  name: string;
-  description?: string;
-  command: string;
-  scope: string;
-  sourcePath?: string;
-  pluginName?: string;
-  pluginId?: string;
-};
 
 type ProviderSkillsResponse = {
   success?: boolean;
@@ -69,71 +67,6 @@ const isPromiseLike = (value: unknown): value is Promise<unknown> =>
 const isSkillCommand = (command: SlashCommand) =>
   command.type === 'skill' || command.metadata?.type === 'skill';
 
-const dedupeProviderSkills = (skills: ProviderSkill[]): ProviderSkill[] => {
-  const seenCommands = new Set<string>();
-
-  return skills.filter((skill) => {
-    // Multiple physical Claude plugin folders can expose the same invocation.
-    // The slash menu should show each executable command only once.
-    const key = skill.command;
-    if (seenCommands.has(key)) {
-      return false;
-    }
-
-    seenCommands.add(key);
-    return true;
-  });
-};
-
-const mapSkillToSlashCommand = (skill: ProviderSkill): SlashCommand => ({
-  name: skill.command,
-  description: skill.description,
-  namespace: 'skill',
-  path: skill.sourcePath,
-  type: 'skill',
-  metadata: {
-    type: skill.scope,
-    scope: skill.scope,
-    sourcePath: skill.sourcePath,
-    pluginName: skill.pluginName,
-    pluginId: skill.pluginId,
-    skillName: skill.name,
-  },
-});
-
-const filterSlashCommands = (
-  commands: SlashCommand[],
-  query: string,
-): SlashCommand[] => {
-  const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) {
-    return commands;
-  }
-
-  const commandPrefix = normalizedQuery.startsWith('/')
-    ? normalizedQuery
-    : `/${normalizedQuery}`;
-  const namePrefixMatches = commands.filter((command) =>
-    command.name.toLowerCase().startsWith(commandPrefix),
-  );
-
-  // Namespaced commands should behave like path completion. Once a provider
-  // namespace is typed, only exact command-prefix matches should stay visible.
-  if (normalizedQuery.includes(':') || namePrefixMatches.length > 0) {
-    return namePrefixMatches;
-  }
-
-  const nameSubstringMatches = commands.filter((command) =>
-    command.name.toLowerCase().includes(normalizedQuery),
-  );
-  if (nameSubstringMatches.length > 0) {
-    return nameSubstringMatches;
-  }
-
-  return commands.filter((command) =>
-    command.description?.toLowerCase().includes(normalizedQuery),
-  );
-};
 
 export function useSlashCommands({
   selectedProject,
@@ -286,25 +219,22 @@ export function useSlashCommands({
   const insertCommandIntoInput = useCallback(
     (command: SlashCommand) => {
       const currentTextarea = textareaRef.current;
-      const insertionStart = slashPosition >= 0
-        ? slashPosition
-        : currentTextarea?.selectionStart ?? input.length;
-      const textBeforeCommand = input.slice(0, insertionStart);
-      const textAfterCommandStart = input.slice(insertionStart);
-      const spaceIndex = textAfterCommandStart.indexOf(' ');
-      const textAfterCommand = slashPosition >= 0 && spaceIndex !== -1
-        ? textAfterCommandStart.slice(spaceIndex).trimStart()
-        : input.slice(currentTextarea?.selectionEnd ?? insertionStart);
-      const separator = textBeforeCommand && !/\s$/.test(textBeforeCommand) ? ' ' : '';
-      const newInput = `${textBeforeCommand}${separator}${command.name}${textAfterCommand ? ` ${textAfterCommand}` : ' '}`;
+      const selectionStart = currentTextarea?.selectionStart ?? input.length;
+      const selectionEnd = currentTextarea?.selectionEnd ?? selectionStart;
+      const { value, cursorPosition } = insertSlashCommand(
+        input,
+        command.name,
+        slashPosition,
+        selectionStart,
+        selectionEnd,
+      );
 
-      setInput(newInput);
+      setInput(value);
       resetCommandMenuState();
 
       window.requestAnimationFrame(() => {
         currentTextarea?.focus();
-        const nextCursorPosition = `${textBeforeCommand}${separator}${command.name} `.length;
-        currentTextarea?.setSelectionRange(nextCursorPosition, nextCursorPosition);
+        currentTextarea?.setSelectionRange(cursorPosition, cursorPosition);
       });
     },
     [input, resetCommandMenuState, setInput, slashPosition, textareaRef],

@@ -68,6 +68,7 @@ import agentRoutes from './routes/agent.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import userRoutes from './routes/user.js';
+import createSystemRouter, { getDeploymentHealth, getDeploymentStateFile } from './routes/system.js';
 import pluginsRoutes from './routes/plugins.js';
 import providerRoutes from './modules/providers/provider.routes.js';
 import voiceRoutes from './voice-proxy.js';
@@ -187,7 +188,8 @@ app.get('/health', (req, res) => {
         product: 'gajae-app',
         protocolVersion: 1,
         timestamp: new Date().toISOString(),
-        version: RUNNING_VERSION
+        version: RUNNING_VERSION,
+        ...getDeploymentHealth(getDeploymentStateFile(), APP_ROOT),
     });
 });
 
@@ -222,6 +224,7 @@ app.use('/api/commands', authenticateToken, commandsRoutes);
 app.use('/api/settings', authenticateToken, settingsRoutes);
 
 app.use('/api/notifications', authenticateToken, notificationRoutes);
+app.use('/api/system', authenticateToken, createSystemRouter({ appRoot: APP_ROOT }));
 
 // User API Routes (protected)
 app.use('/api/user', authenticateToken, userRoutes);

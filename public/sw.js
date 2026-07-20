@@ -91,8 +91,16 @@ self.addEventListener('push', event => {
     renotify: true
   };
 
+  // Only a visible tab handles completion in-app; other push types still notify.
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'Gajae App', options)
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      const isCompletion = Boolean(payload.data?.completionId);
+      if (isCompletion && clientList.some(client => client.visibilityState === 'visible')) {
+        return undefined;
+      }
+
+      return self.registration.showNotification(payload.title || 'Gajae App', options);
+    })
   );
 });
 

@@ -98,6 +98,11 @@
   "notifications": {
     "title": "Benachrichtigungen",
     "description": "Lege fest, welche Benachrichtigungen du erhältst.",
+    "alarm": {
+      "title": "Aufgabenabschlussalarme",
+      "description": "Erhalte einen Alarm, wenn eine Aufgabe abgeschlossen ist.",
+      "enabled": "Aktiviert"
+    },
     "webPush": {
       "title": "Web-Push-Benachrichtigungen",
       "enable": "Push-Benachrichtigungen aktivieren",

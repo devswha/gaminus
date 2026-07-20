@@ -26,6 +26,7 @@ export type ClaudePermissionsState = {
 };
 
 export type NotificationPreferencesState = {
+  alarmEnabled: boolean;
   channels: {
     inApp: boolean;
     webPush: boolean;

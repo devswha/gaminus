@@ -3,8 +3,8 @@ export const GAJAE_APP_WORDMARK_FONT_FAMILY =
 
 export const BRAND_NAME = 'Gajae App';
 export const GITHUB_REPOSITORY_OWNER = 'devswha';
-export const GITHUB_REPOSITORY_NAME = 'gajae-app';
-export const GITHUB_REPOSITORY_URL = 'https://github.com/devswha/gajae-app';
+export const GITHUB_REPOSITORY_NAME = 'gajae-app-v1';
+export const GITHUB_REPOSITORY_URL = `https://github.com/${GITHUB_REPOSITORY_OWNER}/${GITHUB_REPOSITORY_NAME}`;
 export const DOCUMENTATION_URL = `${GITHUB_REPOSITORY_URL}/blob/main/docs/SELF-HOST.md`;
 export const RELEASES_URL = `${GITHUB_REPOSITORY_URL}/releases`;
 export const LICENSE_URL = `${GITHUB_REPOSITORY_URL}/blob/main/LICENSE`;

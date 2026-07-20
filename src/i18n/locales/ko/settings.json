@@ -98,6 +98,11 @@
   "notifications": {
     "title": "알림",
     "description": "수신할 알림 이벤트를 설정합니다.",
+    "alarm": {
+      "title": "작업 완료 알람",
+      "description": "작업이 완료되었을 때 알림을 받습니다.",
+      "enabled": "사용"
+    },
     "webPush": {
       "title": "웹 푸시 알림",
       "enable": "푸시 알림 활성화",

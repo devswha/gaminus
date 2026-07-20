@@ -4,6 +4,10 @@ import type { KeyboardEvent } from 'react';
 import { api } from '../../../../utils/api';
 
 import CommandMenu from './CommandMenu';
+import {
+  filterCommands,
+  getActiveSlashToken,
+} from '../../utils/slashCommandHelpers';
 
 type RelayStatus =
   | { kind: 'idle' }
@@ -20,44 +24,6 @@ type LiveGjcCommand = {
   sourcePath?: string;
 };
 
-/** The active `/…` token under the caret, or null when none applies. */
-function getActiveSlashToken(text: string, caret: number): { start: number; query: string } | null {
-  for (let index = caret - 1; index >= 0; index -= 1) {
-    const char = text[index];
-    if (char === '/') {
-      const precededByBoundary = index === 0 || /\s/.test(text[index - 1]);
-      if (!precededByBoundary) {
-        return null;
-      }
-      const query = text.slice(index, caret);
-      // A whitespace inside the token means the command is already fully typed.
-      return /\s/.test(query) ? null : { start: index, query };
-    }
-    if (/\s/.test(char)) {
-      return null;
-    }
-  }
-  return null;
-}
-
-function filterCommands(commands: LiveGjcCommand[], query: string): LiveGjcCommand[] {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized || normalized === '/') {
-    return commands;
-  }
-  const prefix = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  const bare = prefix.slice(1);
-
-  const byPrefix = commands.filter((command) => command.name.toLowerCase().startsWith(prefix));
-  if (byPrefix.length > 0) {
-    return byPrefix;
-  }
-  const bySubstring = commands.filter((command) => command.name.toLowerCase().includes(bare));
-  if (bySubstring.length > 0) {
-    return bySubstring;
-  }
-  return commands.filter((command) => command.description?.toLowerCase().includes(bare));
-}
 
 /**
  * Composer for a live (read-only) session. It does NOT inject into the

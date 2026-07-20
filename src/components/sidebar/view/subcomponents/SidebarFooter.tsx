@@ -3,8 +3,8 @@ import type { TFunction } from 'i18next';
 
 import type { ReleaseInfo } from '../../../../types/sharedTypes';
 
-const GITHUB_ISSUES_URL = 'https://github.com/devswha/gajae-app/issues/new';
-const GITHUB_REPO_URL = 'https://github.com/devswha/gajae-app';
+const GITHUB_ISSUES_URL = 'https://github.com/devswha/gajae-app-v1/issues/new';
+const GITHUB_REPO_URL = 'https://github.com/devswha/gajae-app-v1';
 
 const DISCORD_INVITE_URL = 'https://discord.gg/dskZax5JPh';
 

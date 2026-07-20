@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { GITHUB_REPOSITORY_NAME, GITHUB_REPOSITORY_OWNER } from '../../../constants/branding';
 import { useDeviceSettings } from '../../../hooks/useDeviceSettings';
 import { useVersionCheck } from '../../../hooks/useVersionCheck';
 import { useUiPreferences } from '../../../hooks/useUiPreferences';
@@ -51,8 +52,8 @@ function Sidebar({
   const { t } = useTranslation(['sidebar', 'common']);
   const { isPWA } = useDeviceSettings({ trackMobile: false });
   const { updateAvailable, restartRequired, latestVersion, currentVersion, releaseInfo, installMode } = useVersionCheck(
-    'devswha',
-    'gajae-app',
+    GITHUB_REPOSITORY_OWNER,
+    GITHUB_REPOSITORY_NAME,
   );
   const { preferences, setPreference } = useUiPreferences();
   const { sidebarVisible } = preferences;

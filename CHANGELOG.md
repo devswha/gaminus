@@ -2,7 +2,7 @@
 
 All notable changes to Gajae App are documented in this file. Current and
 future server artifacts are published only through
-[GitHub Releases](https://github.com/devswha/gajae-app/releases).
+[GitHub Releases](https://github.com/devswha/gajae-app-v1/releases).
 
 ## Unreleased
 

@@ -9,6 +9,7 @@ import { WebSocketProvider } from './contexts/WebSocketContext';
 import { PluginsProvider } from './contexts/PluginsContext';
 import AppContent from './components/app/AppContent';
 import i18n from './i18n/config.js';
+import { useCompletionAlarm } from './hooks/useCompletionAlarm';
 
 const DEPLOYMENT_ASSET_DIRECTORIES = new Set(['assets', 'static', 'icons', 'images']);
 
@@ -100,6 +101,21 @@ function detectRouterBasename() {
   return detectedBasename;
 }
 
+function CompletionAlarmConsumer() {
+  const toast = useCompletionAlarm();
+
+  if (!toast) return null;
+
+  return (
+    <div
+      role="status"
+      className="fixed bottom-4 right-4 z-[9999] rounded-lg bg-green-600 px-4 py-2 text-sm text-white shadow-lg animate-in slide-in-from-bottom-2"
+    >
+      {toast.message}
+    </div>
+  );
+}
+
 export default function App() {
   const routerBasename = detectRouterBasename();
 
@@ -111,14 +127,15 @@ export default function App() {
             <PluginsProvider>
               <TasksSettingsProvider>
                 <TaskMasterProvider>
-                <ProtectedRoute>
-                  <Router basename={routerBasename}>
-                    <Routes>
-                      <Route path="/" element={<AppContent />} />
-                      <Route path="/session/:sessionId" element={<AppContent />} />
-                    </Routes>
-                  </Router>
-                </ProtectedRoute>
+                  <CompletionAlarmConsumer />
+                  <ProtectedRoute>
+                    <Router basename={routerBasename}>
+                      <Routes>
+                        <Route path="/" element={<AppContent />} />
+                        <Route path="/session/:sessionId" element={<AppContent />} />
+                      </Routes>
+                    </Router>
+                  </ProtectedRoute>
                 </TaskMasterProvider>
               </TasksSettingsProvider>
             </PluginsProvider>

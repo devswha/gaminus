@@ -248,10 +248,13 @@ export function useChatRealtimeHandlers({
             break;
           }
 
-          // Celebrate only successful runs (failed runs end with success: false).
+          // Gateway completion alarms are global and leader-elected. Keep this
+          // legacy fallback only for provider frames that predate completionId.
           if (msg.success !== false) {
             showCompletionTitleIndicator();
-            void playChatCompletionSound();
+            if (typeof msg.completionId !== 'string') {
+              void playChatCompletionSound();
+            }
           }
 
           // The session id is stable for the whole conversation (allocated

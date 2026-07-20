@@ -9,7 +9,7 @@
   <a href="#first-run">Erste Schritte</a> ·
   <a href="#daily-workflow">Täglicher Arbeitsablauf</a> ·
   <a href="docs/INSTALL.md">Produktionsinstallation</a> ·
-  <a href="https://github.com/devswha/gajae-app/issues">Probleme</a>
+  <a href="https://github.com/devswha/gajae-app-v1/issues">Probleme</a>
 </p>
 
 <div align="right"><i><a href="./README.md">English</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.ja.md">日本語</a> · <b>Deutsch</b> · <a href="./README.ru.md">Русский</a> · <a href="./README.tr.md">Türkçe</a> · <a href="./README.zh-CN.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a></i></div>
@@ -42,8 +42,8 @@ Anbieterspezifische Modelle, Aufwandssteuerungen, Berechtigungsmodi, Sitzungsver
 ### Die Web-App aus dem Quellcode starten
 
 ```bash
-git clone https://github.com/devswha/gajae-app.git
-cd gajae-app
+git clone https://github.com/devswha/gajae-app-v1.git
+cd gajae-app-v1
 npm ci
 npm run dev
 ```
@@ -120,7 +120,7 @@ Die Electron-App kann entfernte Gajae-App-Server registrieren. Entfernte Ziele e
 
 Die Produktion wird unter Linux x86_64 mit glibc 2.35 oder neuer, Node.js 22 und einem systemd-Dienst auf Benutzerebene unterstützt.
 
-Verwenden Sie ein unveränderliches Artefakt `gajae-app-server-<version>-linux-x64-node22.tar.gz` aus [GitHub Releases](https://github.com/devswha/gajae-app/releases). Eine unterstützte Installation muss:
+Verwenden Sie ein unveränderliches Artefakt `gajae-app-server-<version>-linux-x64-node22.tar.gz` aus [GitHub Releases](https://github.com/devswha/gajae-app-v1/releases). Eine unterstützte Installation muss:
 
 1. eine festgelegte Version und die passende `.sha256`-Datei herunterladen;
 2. die Prüfsumme vor dem Entpacken verifizieren;
@@ -179,7 +179,7 @@ Dieses führt die Abhängigkeitsprüfung, Typprüfungen, alle Testpartitionen, L
 - [Selbsthosting und Rollback](docs/SELF-HOST.md)
 - [Upstream-Herkunft und selektive Übernahme](docs/UPSTREAM.md)
 - [Mitwirken](CONTRIBUTING.md)
-- [Issue-Tracker](https://github.com/devswha/gajae-app/issues)
+- [Issue-Tracker](https://github.com/devswha/gajae-app-v1/issues)
 
 <!-- upstream-lineage:start -->
 Upstream lineage: Gajae App is derived from [CloudCLI UI](https://github.com/siteboon/claudecodeui). Required attribution and license terms are preserved in [LICENSE](LICENSE) and [NOTICE](NOTICE).

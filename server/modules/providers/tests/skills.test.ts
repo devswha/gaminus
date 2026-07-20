@@ -376,6 +376,42 @@ test('providerSkillsService lists codex repository, user, and system skills', { 
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
+/**
+ * This test covers GJC project and user skill directories and verifies their
+ * command presentation uses the GJC CLI syntax.
+ */
+test('providerSkillsService lists gjc skills with GJC CLI commands', { concurrency: false }, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'llm-skills-gjc-'));
+  const workspacePath = path.join(tempRoot, 'workspace');
+  await fs.mkdir(workspacePath, { recursive: true });
+
+  const restoreHomeDir = patchHomeDir(tempRoot);
+  try {
+    await writeSkill(
+      path.join(workspacePath, '.gjc', 'skills'),
+      'gjc-project-dir',
+      'gjc-project',
+      'GJC project skill',
+    );
+    await writeSkill(
+      path.join(tempRoot, '.gjc', 'agent', 'skills'),
+      'gjc-user-dir',
+      'gjc-user',
+      'GJC user skill',
+    );
+
+    const skills = await providerSkillsService.listProviderSkills('gjc', { workspacePath });
+    const byName = new Map(skills.map((skill) => [skill.name, skill]));
+
+    assert.equal(byName.get('gjc-project')?.scope, 'project');
+    assert.equal(byName.get('gjc-project')?.command, '/skill:gjc-project');
+    assert.equal(byName.get('gjc-user')?.scope, 'user');
+    assert.equal(byName.get('gjc-user')?.command, '/skill:gjc-user');
+  } finally {
+    restoreHomeDir();
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
 
 /**
  * This test covers OpenCode skill lookup across cwd-to-git-root project folders

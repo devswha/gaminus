@@ -1,15 +1,17 @@
 import { open, stat } from 'node:fs/promises';
 
 import { userDb } from '@/modules/database/index.js';
+import { createCompletionId } from '@/modules/notifications/services/completion-id.service.js';
 import { notifyLiveTurnEnded } from '@/modules/notifications/services/notification-orchestrator.service.js';
 import { getLiveGjcSessionsDetailed, IDLE_GJC_ID_PREFIX } from '@/modules/providers/index.js';
 
 /**
  * Live turn monitor — "답변이 왔을 때 알림" for tmux-driven gjc sessions.
  *
- * Web-run sessions already notify via notifyRunStopped when their child exits;
- * tmux-driven sessions have no app-owned run, so nothing fired. This monitor
- * ticks server-side (independent of any open browser tab — web push must work
+ * Web-run sessions notify from the chat run registry's terminal-event path;
+ * tmux-driven sessions have no app-owned run, so this monitor supplies their
+ * corresponding completion alarm.
+ * The monitor ticks server-side (independent of any open browser tab — web push must work
  * with the tab closed) and reads each live transcript's APPENDED DELTA only,
  * looking for the turn terminator gjc actually writes (실측 5,788건):
  * an assistant `message` record with `stopReason` `"stop"` (or `"error"`).
@@ -22,7 +24,7 @@ import { getLiveGjcSessionsDetailed, IDLE_GJC_ID_PREFIX } from '@/modules/provid
  *   children (which also hold transcripts open) already notify through the
  *   run path and must not double-fire.
  * - Delta reads are size-capped; a monstrous append only skips ahead.
- * - Per-session dedupe lives in the orchestrator (20s window).
+ * - Completion dedupe is keyed by transcript path and consumed byte offset.
  */
 
 const DELTA_READ_CAP_BYTES = 2 * 1024 * 1024;
@@ -63,7 +65,13 @@ type MonitorDeps = {
     sessions: Array<{ id: string; tmuxName: string | null; claim: 'lineage' | 'cwd' | null }>;
     transcriptPaths: Map<string, string>;
   }>;
-  notify: (args: { userId: number; sessionId: string; tmuxName: string | null; stopReason: LiveTurnEnd }) => void;
+  notify: (args: {
+    userId: number;
+    sessionId: string;
+    tmuxName: string | null;
+    stopReason: LiveTurnEnd;
+    completionId: string;
+  }) => void;
   getUserId: () => number | null;
   readDelta?: (path: string, start: number, end: number) => Promise<string>;
   statSize?: (path: string) => Promise<number>;
@@ -117,6 +125,7 @@ export function createLiveTurnMonitor(deps: MonitorDeps) {
         sessionId,
         tmuxName: cursor.tmuxName,
         stopReason: ends[ends.length - 1],
+        completionId: createCompletionId(cursor.path, cursor.offset),
       });
     }
   };
@@ -198,8 +207,8 @@ export function startLiveTurnMonitor(intervalMs = DEFAULT_INTERVAL_MS): (() => v
   }
   const monitor = createLiveTurnMonitor({
     getDetailed: getLiveGjcSessionsDetailed,
-    notify: ({ userId, sessionId, tmuxName, stopReason }) =>
-      notifyLiveTurnEnded({ userId, sessionId, tmuxName, stopReason }),
+    notify: ({ userId, sessionId, tmuxName, stopReason, completionId }) =>
+      notifyLiveTurnEnded({ userId, sessionId, tmuxName, stopReason, completionId }),
     getUserId: () => {
       try {
         const user = userDb.getFirstUser();

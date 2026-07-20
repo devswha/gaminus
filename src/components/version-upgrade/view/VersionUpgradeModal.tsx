@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { authenticatedFetch } from "../../../utils/api";
 import { ReleaseInfo } from "../../../types/sharedTypes";
 import { copyTextToClipboard } from "../../../utils/clipboard";
 import type { InstallMode } from "../../../hooks/useVersionCheck";
+import { decideUpdatePolling, type UpdatePollingDecision } from "../utils/updatePolling";
 
 interface VersionUpgradeModalProps {
     isOpen: boolean;
@@ -26,39 +27,155 @@ export function VersionUpgradeModal({
     installMode
 }: VersionUpgradeModalProps) {
     const { t } = useTranslation('common');
-    const upgradeCommand = installMode === 'npm'
-        ? t('versionUpdate.npmUpgradeCommand')
+    const isManagedInstall = installMode === 'managed';
+    const upgradeCommand = isManagedInstall
+        ? 'gajae-app.sh update'
         : 'git checkout main && git pull && npm install';
+    const updatePollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const updatePollSession = useRef(0);
     const [isUpdating, setIsUpdating] = useState(false);
     const [updateOutput, setUpdateOutput] = useState('');
     const [updateError, setUpdateError] = useState('');
 
+    useEffect(() => {
+        if (!isOpen) {
+            updatePollSession.current += 1;
+            if (updatePollTimer.current) {
+                clearTimeout(updatePollTimer.current);
+                updatePollTimer.current = null;
+            }
+        }
+
+        return () => {
+            updatePollSession.current += 1;
+            if (updatePollTimer.current) {
+                clearTimeout(updatePollTimer.current);
+                updatePollTimer.current = null;
+            }
+        };
+    }, [isOpen]);
+
     const handleUpdateNow = useCallback(async () => {
+        const pollIntervalMs = 3_000;
+        const pollTimeoutMs = 5 * 60 * 1_000;
+        const startedAt = Date.now();
+        let operationId: string | null = null;
+        const pollSession = updatePollSession.current + 1;
+        updatePollSession.current = pollSession;
+        let polling = true;
+
+        const stopPolling = () => {
+            polling = false;
+            if (updatePollSession.current === pollSession && updatePollTimer.current) {
+                clearTimeout(updatePollTimer.current);
+                updatePollTimer.current = null;
+            }
+        };
+        const failUpdate = (message: string) => {
+            if (!polling || updatePollSession.current !== pollSession) return;
+            stopPolling();
+            setIsUpdating(false);
+            setUpdateError(message);
+            setUpdateOutput(prev => `${prev}\nUpdate failed: ${message}\n`);
+        };
+        const handlePollingDecision = (decision: UpdatePollingDecision) => {
+            if (decision.action === 'continue') return false;
+
+            if (decision.action === 'timeout') {
+                failUpdate('Update status timed out. Check the deployment status and update manually if needed.');
+                return true;
+            }
+
+            if (decision.action === 'failure') {
+                failUpdate(decision.reason);
+                return true;
+            }
+
+            stopPolling();
+            if (updatePollSession.current !== pollSession) return true;
+            setIsUpdating(false);
+            setUpdateOutput(prev => `${prev}\nUpdate completed successfully.\nPlease restart the server to apply changes.\n`);
+            return true;
+        };
+        const schedulePolling = () => {
+            if (updatePollSession.current === pollSession) {
+                updatePollTimer.current = setTimeout(pollStatus, pollIntervalMs);
+            }
+        };
+        const pollStatus = async () => {
+            if (!polling || updatePollSession.current !== pollSession || !operationId) return;
+
+            const elapsedMs = Date.now() - startedAt;
+            if (handlePollingDecision(decideUpdatePolling({
+                operationId,
+                elapsedMs,
+                timeoutMs: pollTimeoutMs,
+            }))) {
+                return;
+            }
+
+            try {
+                const response = await authenticatedFetch('/api/system/update/status');
+                const status = response.ok
+                    ? await response.json() as {
+                        operationId?: unknown;
+                        updateState?: unknown;
+                        failure?: unknown;
+                    }
+                    : undefined;
+                const decision = decideUpdatePolling({
+                    operationId,
+                    elapsedMs: Date.now() - startedAt,
+                    timeoutMs: pollTimeoutMs,
+                    status,
+                    networkError: response.ok ? undefined : new Error(`Status request failed with ${response.status}.`),
+                });
+
+                if (!handlePollingDecision(decision)) {
+                    schedulePolling();
+                }
+            } catch (error) {
+                const decision = decideUpdatePolling({
+                    operationId,
+                    elapsedMs: Date.now() - startedAt,
+                    timeoutMs: pollTimeoutMs,
+                    networkError: error,
+                });
+
+                if (!handlePollingDecision(decision)) {
+                    schedulePolling();
+                }
+            }
+        };
+
         setIsUpdating(true);
-        setUpdateOutput('Starting update...\n');
+        setUpdateOutput('Update started. Waiting for deployment status...\n');
         setUpdateError('');
 
         try {
-            // Call the backend API to run the update command
             const response = await authenticatedFetch('/api/system/update', {
                 method: 'POST',
             });
+            const data = await response.json() as { error?: unknown; operationId?: unknown };
 
-            const data = await response.json();
+            if (response.status === 202) {
+                if (typeof data.operationId !== 'string' || data.operationId.length === 0) {
+                    failUpdate('Update request did not return an operation ID.');
+                    return;
+                }
 
-            if (response.ok) {
-                setUpdateOutput(prev => prev + data.output + '\n');
-                setUpdateOutput(prev => prev + '\n✅ Update completed successfully!\n');
-                setUpdateOutput(prev => prev + 'Please restart the server to apply changes.' + '\n');
-            } else {
-                setUpdateError(data.error || 'Update failed');
-                setUpdateOutput(prev => prev + '\n❌ Update failed: ' + (data.error || 'Unknown error') + '\n');
+                operationId = data.operationId;
+                schedulePolling();
+                return;
             }
-        } catch (error: any) {
-            setUpdateError(error.message);
-            setUpdateOutput(prev => prev + '\n❌ Update failed: ' + error.message + '\n');
-        } finally {
-            setIsUpdating(false);
+
+            const serverError = typeof data.error === 'string' ? data.error : 'Update failed';
+            const manualGuidance = [409, 423, 502, 503].includes(response.status)
+                ? ' Update manually from your installation directory.'
+                : '';
+            failUpdate(`${serverError}${manualGuidance}`);
+        } catch (error) {
+            failUpdate(error instanceof Error ? error.message : 'Update failed');
         }
     }, []);
 
@@ -157,7 +274,7 @@ export function VersionUpgradeModal({
                 )}
 
                 {/* Upgrade Instructions */}
-                {!isUpdating && !updateOutput && (
+                {(!isManagedInstall || updateError || (!isUpdating && !updateOutput)) && (
                     <div className="space-y-3">
                         <h3 className="text-sm font-medium text-gray-900 dark:text-white">{t('versionUpdate.manualUpgrade')}</h3>
                         <div className="rounded-lg border bg-gray-100 p-3 dark:bg-gray-800">
@@ -179,29 +296,29 @@ export function VersionUpgradeModal({
                     >
                         {updateOutput ? t('versionUpdate.buttons.close') : t('versionUpdate.buttons.later')}
                     </button>
-                    {!updateOutput && (
-                        <>
-                            <button
-                                onClick={() => copyTextToClipboard(upgradeCommand)}
-                                className="flex-1 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                            >
-                                {t('versionUpdate.buttons.copyCommand')}
-                            </button>
-                            <button
-                                onClick={handleUpdateNow}
-                                disabled={isUpdating}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
-                            >
-                                {isUpdating ? (
-                                    <>
-                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                                        {t('versionUpdate.buttons.updating')}
-                                    </>
-                                ) : (
-                                    t('versionUpdate.buttons.updateNow')
-                                )}
-                            </button>
-                        </>
+                    {!isUpdating && (!updateOutput || updateError) && (
+                        <button
+                            onClick={() => copyTextToClipboard(upgradeCommand)}
+                            className="flex-1 rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                        >
+                            {t('versionUpdate.buttons.copyCommand')}
+                        </button>
+                    )}
+                    {isManagedInstall && !updateOutput && (
+                        <button
+                            onClick={handleUpdateNow}
+                            disabled={isUpdating}
+                            className="flex flex-1 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-400"
+                        >
+                            {isUpdating ? (
+                                <>
+                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                                    {t('versionUpdate.buttons.updating')}
+                                </>
+                            ) : (
+                                t('versionUpdate.buttons.updateNow')
+                            )}
+                        </button>
                     )}
                 </div>
             </div>

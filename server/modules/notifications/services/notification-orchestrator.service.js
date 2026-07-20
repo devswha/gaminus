@@ -2,6 +2,7 @@ import webPush from 'web-push';
 
 import { notificationPreferencesDb, pushSubscriptionsDb, sessionsDb } from '@/modules/database/index.js';
 import { sendDesktopNotification as sendDesktopNotificationToClients } from '@/modules/notifications/services/desktop-notification-clients.service.js';
+import { broadcastCompletionAlarm } from '@/modules/websocket/services/websocket-state.service.js';
 
 const KIND_TO_PREF_KEY = {
   action_required: 'actionRequired',
@@ -41,7 +42,7 @@ function isNotificationEventEnabled(preferences, event) {
 
 function isDuplicate(event) {
   cleanupOldEventKeys();
-  const key = event.dedupeKey || `${event.provider}:${event.kind || 'info'}:${event.code || 'generic'}:${event.sessionId || 'none'}`;
+  const key = event.completionId || event.dedupeKey || `${event.provider}:${event.kind || 'info'}:${event.code || 'generic'}:${event.sessionId || 'none'}`;
   if (recentEventKeys.has(key)) {
     return true;
   }
@@ -56,6 +57,7 @@ function createNotificationEvent({
   code = 'generic.info',
   meta = {},
   severity = 'info',
+  completionId = null,
   dedupeKey = null,
   requiresUserAction = false
 }) {
@@ -67,26 +69,12 @@ function createNotificationEvent({
     meta,
     severity,
     requiresUserAction,
+    completionId,
     dedupeKey,
     createdAt: new Date().toISOString()
   };
 }
 
-function normalizeErrorMessage(error) {
-  if (typeof error === 'string') {
-    return error;
-  }
-
-  if (error && typeof error.message === 'string') {
-    return error.message;
-  }
-
-  if (error == null) {
-    return 'Unknown error';
-  }
-
-  return String(error);
-}
 
 function normalizeSessionName(sessionName) {
   if (typeof sessionName !== 'string') {
@@ -180,7 +168,8 @@ function buildNotificationPayload(event) {
       code: normalizedEvent.code,
       provider: normalizedEvent.provider || null,
       sessionName,
-      tag: `${normalizedEvent.provider || 'assistant'}:${normalizedEvent.sessionId || 'none'}:${normalizedEvent.code}`
+      completionId: normalizedEvent.completionId || null,
+      tag: normalizedEvent.completionId || `${normalizedEvent.provider || 'assistant'}:${normalizedEvent.sessionId || 'none'}:${normalizedEvent.code}`
     }
   };
 }
@@ -255,37 +244,6 @@ function notifyUserIfEnabled({ userId, event }) {
   }
 }
 
-function notifyRunStopped({ userId, provider, sessionId = null, stopReason = 'completed', sessionName = null }) {
-  notifyUserIfEnabled({
-    userId,
-    event: createNotificationEvent({
-      provider,
-      sessionId,
-      kind: 'stop',
-      code: 'run.stopped',
-      meta: { stopReason, sessionName },
-      severity: 'info',
-      dedupeKey: `${provider}:run:stop:${sessionId || 'none'}:${stopReason}`
-    })
-  });
-}
-
-function notifyRunFailed({ userId, provider, sessionId = null, error, sessionName = null }) {
-  const errorMessage = normalizeErrorMessage(error);
-
-  notifyUserIfEnabled({
-    userId,
-    event: createNotificationEvent({
-      provider,
-      sessionId,
-      kind: 'error',
-      code: 'run.failed',
-      meta: { error: errorMessage, sessionName },
-      severity: 'error',
-      dedupeKey: `${provider}:run:error:${sessionId || 'none'}:${errorMessage}`
-    })
-  });
-}
 
 /**
  * Turn completion of a tmux-driven (externally owned) gjc session, detected by
@@ -293,28 +251,79 @@ function notifyRunFailed({ userId, provider, sessionId = null, error, sessionNam
  * kind (`live_stop` → prefs.events.liveStop) from web-run `stop` so the two
  * lanes toggle independently.
  *
- * @param {{ userId: number, sessionId: string | null, tmuxName?: string | null, stopReason?: string }} args
+ * @param {{ userId: number, sessionId: string | null, tmuxName?: string | null, stopReason?: string, completionId: string }} args
  */
-function notifyLiveTurnEnded({ userId, sessionId, tmuxName = null, stopReason = 'stop' }) {
-  notifyUserIfEnabled({
+function notifyLiveTurnEnded({ userId, sessionId, tmuxName = null, stopReason = 'stop', completionId = null }) {
+  notifySessionCompleted({
     userId,
-    event: createNotificationEvent({
-      provider: 'gjc',
-      sessionId,
-      kind: 'live_stop',
-      code: 'live.turn_end',
-      meta: { sessionName: tmuxName, stopReason },
-      severity: stopReason === 'error' ? 'error' : 'info',
-      dedupeKey: `gjc:live:turn:${sessionId || 'none'}`
-    })
+    provider: 'gjc',
+    sessionId,
+    sessionName: tmuxName,
+    stopReason,
+    completionId
   });
+}
+
+/**
+ * Single dispatch point for session-completion alarms (web-run and tmux lanes).
+ * Gated only by the alarmEnabled master preference; web push additionally
+ * requires a webPush channel subscription downstream.
+ *
+ * @param {{ userId: number | null, provider: string, sessionId?: string | null, sessionName?: string | null, stopReason?: string, completionId: string | null }} args
+ */
+function notifySessionCompleted({
+  userId,
+  provider,
+  sessionId = null,
+  sessionName = null,
+  stopReason = 'stop',
+  completionId
+}) {
+  if (userId == null || !completionId) {
+    return;
+  }
+
+  const preferences = notificationPreferencesDb.getPreferences(userId);
+  if (preferences?.alarmEnabled === false) {
+    return;
+  }
+
+  const event = normalizeNotificationSession(createNotificationEvent({
+    provider,
+    sessionId,
+    kind: stopReason === 'error' ? 'error' : 'stop',
+    code: stopReason === 'error' ? 'run.failed' : 'run.stopped',
+    meta: { sessionName, stopReason },
+    severity: stopReason === 'error' ? 'error' : 'info',
+    completionId
+  }));
+  if (isDuplicate(event)) {
+    return;
+  }
+
+  const payload = buildNotificationPayload(event);
+  const timestamp = Date.now();
+  broadcastCompletionAlarm({
+    completionId,
+    sessionId: payload.data.sessionId,
+    provider,
+    sessionName: payload.data.sessionName,
+    stopReason,
+    timestamp
+  });
+
+  const webPushChannel = notificationChannels.find((channel) => channel.id === 'webPush');
+  if (webPushChannel?.isEnabled(preferences)) {
+    Promise.resolve(webPushChannel.send({ userId, event, payload })).catch((err) => {
+      console.error('Notification channel "webPush" send error:', err);
+    });
+  }
 }
 
 export {
   buildNotificationPayload,
   createNotificationEvent,
   notifyUserIfEnabled,
-  notifyRunStopped,
-  notifyRunFailed,
-  notifyLiveTurnEnded
+  notifyLiveTurnEnded,
+  notifySessionCompleted
 };
