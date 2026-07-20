@@ -4,6 +4,61 @@ All notable changes to Gajae App are documented in this file. Current and
 future server artifacts are published only through
 [GitHub Releases](https://github.com/devswha/gajae-app-v1/releases).
 
+## 1.37.0 (2026-07-20)
+
+### Versioning
+
+- Jumped the release line from `1.0.0` to `1.37.0` by owner decision so every
+  Gajae App version stays unambiguously above the retired upstream `1.36.x`
+  numbering; the strict SemVer release-tag comparison introduced in this
+  release relies on that monotonicity. Historical `1.0.0` remains valid.
+
+### Session completion alarm
+
+- Session completions now raise one canonical alarm regardless of which
+  provider ran the turn: the chat run registry mints a `completionId` at the
+  single terminal-accept point, broadcasts a `completion-alarm` frame to every
+  authenticated tab, and web push carries the same id, so web-run and tmux
+  lanes deduplicate against each other. Provider runtimes route their legacy
+  terminal notifications through a registry-aware delegate instead of
+  double-firing.
+- Only one browser tab sounds the alarm: a user-scoped leader is elected via
+  the Web Locks API with a BroadcastChannel lease/heartbeat fallback, and only
+  the leader consumes pending completions (follower-first delivery and late
+  tab joins stay exactly-once). Aborted runs never alarm.
+- New master preference `alarmEnabled` (default on, explicit off preserved,
+  Settings → Notifications toggle, all locales) gates the completion alarm on
+  every channel. The service worker suppresses completion OS push only while
+  a tab is visible; permission requests and other pushes are unaffected.
+
+### GJC skill palette
+
+- The GJC provider now emits its canonical `/skill:<name>` invocation for
+  discovered skills, so the composer's `/` palette inserts commands the CLI
+  actually activates (verified against live NDJSON: `customType=skill-prompt`
+  with preserved name and arguments). The standard composer and the live
+  relay composer share one pure slash-palette helper module.
+
+### Managed updates
+
+- Release identity is now a strict SemVer release-tag comparison (BigInt
+  precision, ahead/equal/behind, prereleases excluded): the deployment state
+  owns the installed `release_tag`, `/health` exposes it, and the version
+  check consumes only that exposed value. Repository coordinates moved to
+  `devswha/gajae-app-v1` everywhere and the identity scanner bans the legacy
+  coordinate outside provenance records.
+- New `POST /api/system/update` runs the managed updater as a detached
+  `systemd-run` transient unit with an atomic single-flight reservation,
+  server-side trusted tag resolution, fail-closed eligibility (deployment
+  state and process must match), and an operation-id correlated
+  `GET /api/system/update/status` for restart-tolerant progress polling in
+  the upgrade modal. `gajae-app.sh` records the applied release tag through
+  install, update, and rollback.
+- Added an isolated sandbox e2e harness (`scripts/tests/gajae-app-sandbox-e2e.sh`)
+  that proves install → update → health-failure rollback with a stateful fake
+  systemd, full `env -i` sanitization, and hostile git environment resistance
+  without touching the real home or service.
+
 ## 1.0.0 (2026-07-17)
 
 ### Versioning
