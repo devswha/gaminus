@@ -4,6 +4,17 @@ All notable changes to Gajae App are documented in this file. Current and
 future server artifacts are published only through
 [GitHub Releases](https://github.com/devswha/gajae-app-v1/releases).
 
+## 1.37.1 (2026-07-20)
+
+### Fixes
+
+- The registry-aware terminal notifier no longer lets a session-mapping lookup
+  or notification dispatch failure crash a provider runtime's close path
+  (observed as an unhandled `no such table: sessions` rejection in
+  database-less unit environments). Lookup failures fall back to the
+  provider-native session id and notification failures are logged, never
+  rethrown.
+
 ## 1.37.0 (2026-07-20)
 
 ### Versioning

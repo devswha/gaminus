@@ -24,21 +24,37 @@ export function notifyRunTerminal({
   sessionName?: string | null;
   stopReason?: 'stop' | 'error';
 }): void {
-  const appSessionId = sessionId
-    ? sessionsDb.getSessionById(sessionId)?.session_id
-      ?? sessionsDb.getSessionByProviderSessionId(provider, sessionId)?.session_id
-      ?? sessionId
-    : null;
-  if (appSessionId && chatRunRegistry.getRun(appSessionId)) {
-    return;
+  // Session-id resolution and notification are best-effort side effects of a
+  // terminal runtime event: a missing/uninitialized database or a notification
+  // failure must never crash the provider runtime's close path. On resolution
+  // failure, fall back to the provider-native id (the orchestrator normalizes
+  // further where it can).
+  let appSessionId: string | null = null;
+  try {
+    appSessionId = sessionId
+      ? sessionsDb.getSessionById(sessionId)?.session_id
+        ?? sessionsDb.getSessionByProviderSessionId(provider, sessionId)?.session_id
+        ?? sessionId
+      : null;
+  } catch (error) {
+    console.warn('[notifications] terminal session lookup failed; using native id:', error instanceof Error ? error.message : error);
+    appSessionId = sessionId;
   }
 
-  notifySessionCompleted({
-    userId: userId == null ? null : Number(userId),
-    provider,
-    sessionId: appSessionId,
-    sessionName,
-    stopReason,
-    completionId: createCompletionId(appSessionId || provider, 0),
-  });
+  try {
+    if (appSessionId && chatRunRegistry.getRun(appSessionId)) {
+      return;
+    }
+
+    notifySessionCompleted({
+      userId: userId == null ? null : Number(userId),
+      provider,
+      sessionId: appSessionId,
+      sessionName,
+      stopReason,
+      completionId: createCompletionId(appSessionId || provider, 0),
+    });
+  } catch (error) {
+    console.warn('[notifications] terminal notification failed:', error instanceof Error ? error.message : error);
+  }
 }
