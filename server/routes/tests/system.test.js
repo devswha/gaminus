@@ -13,10 +13,10 @@ import {
   resolveLatestStableReleaseTag,
 } from '../system.js';
 
-const APP_ROOT = '/srv/gajae-app';
+const APP_ROOT = '/srv/gaminus';
 const SHA = 'a'.repeat(40);
 
-const TEST_DEPLOYMENT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gajae-app-system-route-'));
+const TEST_DEPLOYMENT_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'gaminus-system-route-'));
 let testUpdateHandlerCount = 0;
 
 function createTestUpdateHandler(options) {
@@ -98,10 +98,10 @@ test('managed deployment update launches only after systemd-run accepts the requ
   child.emit('exit', 0);
 
   assert.equal(res.statusCode, 202);
-  assert.equal(res.body.unit, 'gajae-app-update-12345');
+  assert.equal(res.body.unit, 'gaminus-update-12345');
   assert.deepEqual(calls, [[
     'systemd-run',
-    ['--user', '--collect', '--unit=gajae-app-update-12345', '--setenv=GAJAE_APP_OPERATION_ID=operation-123', `${APP_ROOT}/scripts/gajae-app.sh`, 'update', '--ref', 'v1.38.0'],
+    ['--user', '--collect', '--unit=gaminus-update-12345', '--setenv=GAMINUS_OPERATION_ID=operation-123', `${APP_ROOT}/scripts/gaminus.sh`, 'update', '--ref', 'v1.38.0'],
     { detached: true, stdio: 'ignore', shell: false },
   ]]);
 });
@@ -252,7 +252,7 @@ test('update status clears a matching terminal operation reservation', () => {
   assert.deepEqual(removed, ['/deployment/update-operation.json']);
 });
 test('concurrent updates reserve one operation before release lookup', async () => {
-  const deploymentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gajae-app-update-operation-'));
+  const deploymentDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gaminus-update-operation-'));
   const stateFile = path.join(deploymentDir, 'deployment.env');
   fs.writeFileSync(stateFile, state());
 
@@ -291,9 +291,9 @@ test('concurrent updates reserve one operation before release lookup', async () 
 });
 
 test('current_release_tag does not preserve a failed candidate ref as a release tag', () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'gajae-app-release-tag-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'gaminus-release-tag-'));
   try {
-    const deploymentDir = path.join(home, '.gajae-app', 'deployment');
+    const deploymentDir = path.join(home, '.gaminus', 'deployment');
     fs.mkdirSync(deploymentDir, { recursive: true });
     fs.writeFileSync(
       path.join(deploymentDir, 'deployment.env'),
@@ -302,10 +302,10 @@ test('current_release_tag does not preserve a failed candidate ref as a release 
 
     const output = execFileSync(
       'bash',
-      ['-c', 'source "$1" update; current_release_tag', '--', path.resolve('scripts/gajae-app.sh')],
+      ['-c', 'source "$1" update; current_release_tag', '--', path.resolve('scripts/gaminus.sh')],
       {
         encoding: 'utf8',
-        env: { ...process.env, HOME: home, GAJAE_APP_SOURCE_ONLY: '1' },
+        env: { ...process.env, HOME: home, GAMINUS_SOURCE_ONLY: '1' },
       },
     );
     assert.equal(output, '');

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { authenticatedFetch } from '../utils/api';
 
-type GajaeAppWindow = Window & {
-  gajaeAppDesktopNotifications?: unknown;
+type GaminusWindow = Window & {
+  gaminusDesktopNotifications?: unknown;
 };
 type WebPushState = {
   permission: NotificationPermission | 'unsupported';
@@ -28,7 +28,7 @@ export function useWebPush(): WebPushState {
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(() => {
     if (
       typeof window === 'undefined'
-      || Boolean((window as GajaeAppWindow).gajaeAppDesktopNotifications)
+      || Boolean((window as GaminusWindow).gaminusDesktopNotifications)
       || !('Notification' in window)
       || !('serviceWorker' in navigator)
     ) {

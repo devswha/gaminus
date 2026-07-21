@@ -1,8 +1,43 @@
-# Gajae App changelog
+# Gaminus changelog
 
-All notable changes to Gajae App are documented in this file. Current and
+All notable changes to Gaminus are documented in this file. Current and
 future server artifacts are published only through
-[GitHub Releases](https://github.com/devswha/gajae-app-v1/releases).
+[GitHub Releases](https://github.com/devswha/gaminus/releases).
+
+## 1.38.0 (2026-07-21)
+
+### Product rename: Gaminus
+
+- The product formerly published as `gajae-app` (repository
+  `devswha/gajae-app-v1`, releases up to v1.37.1) is now **Gaminus** — the
+  gajae take on Terminus. The repository coordinate is `devswha/gaminus`; the
+  old coordinate remains only as provenance and GitHub redirects it.
+- Renamed identity, everywhere at once: package/CLI `gaminus`, data root
+  `~/.gaminus`, user unit `gaminus.service`, URL scheme `gaminus://`,
+  environment prefix `GAMINUS_`, desktop app id `app.gaminus.desktop`, server
+  artifact `gaminus-server-<version>-linux-x64-node22.tar.gz`, native core
+  crate `gaminus-core`, and the nginx subpath template variables. The
+  identity scanner now bans the pre-rename product token outside provenance
+  records, and the upstream provenance document records the rename.
+- Existing installations migrate without manual steps:
+  - at boot the server moves user data (`auth.db`, `assets/`, marker files)
+    from the legacy data root into `~/.gaminus`, never clobbering newer data;
+  - `scripts/gaminus.sh install|update` adopts a pre-rename managed
+    deployment: it moves the install checkout and deployment state, repoints
+    the origin remote, rewrites recorded roots, and retires the legacy-named
+    user unit after stopping it;
+  - the deployment state reader falls back to the legacy state path until
+    adoption happens, so update status and eligibility keep working right
+    after the rename hop;
+  - a transitional systemd unit template is kept under the legacy filename so
+    a deployment still running the pre-rename manager can update across the
+    rename in one managed hop.
+- Breaking: `GAMINUS_*` replaces the old `GAJAE_APP_`-prefixed environment
+  overrides (no fallback), old-scheme desktop deep links stop resolving, and
+  sandbox template/image names moved to `gaminus-sandbox:*`.
+- Unchanged: the Gajae Code (GJC) provider brand and mascot, the
+  `GAJAE_AUTH`/`GAJAE_ALLOW_UNAUTH_REMOTE` server auth variables, and the
+  LICENSE/NOTICE legal texts.
 
 ## 1.37.1 (2026-07-20)
 

@@ -58,7 +58,7 @@ export class TabsController {
     this.tabs = [
       {
         id: LAUNCHER_TAB_ID,
-        title: 'Gajae App',
+        title: 'Gaminus',
         kind: 'launcher',
         closable: false,
       },

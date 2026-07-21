@@ -157,6 +157,6 @@ tasks/
 /.desktop-build/
 /release/
 /electron/server-bundle-config.json
-gajae-app-source.tar.gz
-gajae-app-sidebar.html
+gaminus-source.tar.gz
+gaminus-sidebar.html
 electron/*.tar.gz

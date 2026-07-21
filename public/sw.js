@@ -1,7 +1,7 @@
-// Service Worker for Gajae App PWA
+// Service Worker for Gaminus PWA
 // Cache only manifest (needed for PWA install). HTML and JS are never pre-cached
 // so a rebuild + refresh always picks up the latest assets.
-const CACHE_NAME = 'gajae-app-v1';
+const CACHE_NAME = 'gaminus';
 const urlsToCache = [
   '/manifest.json'
 ];
@@ -79,7 +79,7 @@ self.addEventListener('push', event => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: 'Gajae App', body: event.data.text() };
+    payload = { title: 'Gaminus', body: event.data.text() };
   }
 
   const options = {
@@ -99,7 +99,7 @@ self.addEventListener('push', event => {
         return undefined;
       }
 
-      return self.registration.showNotification(payload.title || 'Gajae App', options);
+      return self.registration.showNotification(payload.title || 'Gaminus', options);
     })
   );
 });

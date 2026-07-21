@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 
 import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
+import { migrateLegacyDataRoot } from './utils/legacy-identity.js';
 
 const __dirname = getModuleDir(import.meta.url);
 // Resolve the repo/app root via the nearest /server folder so this file keeps finding the
@@ -26,9 +27,13 @@ try {
   console.error('No .env file found or error reading it:', e.message);
 }
 
+// Adopt user data written before the Gaminus rename (auth.db, assets, marker
+// files under the old data root) before anything derives paths from ~/.gaminus.
+migrateLegacyDataRoot();
+
 // Keep the default database in a stable user-level location so rebuilding dist-server
 // never changes where the backend stores auth.db when DATABASE_PATH is not set explicitly.
-const DEFAULT_DATABASE_PATH = path.join(os.homedir(), '.gajae-app', 'auth.db');
+const DEFAULT_DATABASE_PATH = path.join(os.homedir(), '.gaminus', 'auth.db');
 
 if (!process.env.DATABASE_PATH) {
   process.env.DATABASE_PATH = DEFAULT_DATABASE_PATH;

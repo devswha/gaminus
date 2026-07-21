@@ -1,10 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-APP_ROOT="${1:-/opt/gajae-app}"
+APP_ROOT="${1:-/opt/gaminus}"
 
 fail() {
-  printf 'Gajae App sandbox build failed: %s\n' "$*" >&2
+  printf 'Gaminus sandbox build failed: %s\n' "$*" >&2
   exit 1
 }
 
@@ -33,9 +33,9 @@ case "$(uname -s)/$(uname -m)" in
   *) fail "Linux x64 is required; found $(uname -s)/$(uname -m)" ;;
 esac
 
-install -d -m 0755 -o agent -g agent /home/agent/.gajae-app/logs
-cat > /usr/local/bin/gajae-app <<'EOF'
+install -d -m 0755 -o agent -g agent /home/agent/.gaminus/logs
+cat > /usr/local/bin/gaminus <<'EOF'
 #!/bin/sh
-exec node /opt/gajae-app/dist-server/server/cli.js "$@"
+exec node /opt/gaminus/dist-server/server/cli.js "$@"
 EOF
-chmod 0755 /usr/local/bin/gajae-app
+chmod 0755 /usr/local/bin/gaminus

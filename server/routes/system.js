@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import express from 'express';
 
 import { REPOSITORY_SLUG } from '../../shared/productIdentity.js';
+import { legacyDataRoot } from '../utils/legacy-identity.js';
 
 const SHA_PATTERN = /^[0-9a-f]{40,64}$/i;
 const STABLE_SEMVER_TAG_PATTERN = /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
@@ -15,8 +16,14 @@ const MANUAL_UPDATE_MESSAGE = 'Automatic updates are available only for managed 
 const UPDATE_IN_PROGRESS_MESSAGE = 'An update is already in progress. Check its status before starting another update.';
 
 export function getDeploymentStateFile(homeDir = os.homedir()) {
-  // Keep this in sync with scripts/gajae-app.sh's STATE_FILE.
-  return path.join(homeDir, '.gajae-app', 'deployment', 'deployment.env');
+  // Keep this in sync with scripts/gaminus.sh's STATE_FILE.
+  const current = path.join(homeDir, '.gaminus', 'deployment', 'deployment.env');
+  if (fs.existsSync(current)) return current;
+  // A deployment whose last update ran before the Gaminus rename keeps its
+  // state under the legacy data root until scripts/gaminus.sh adopts it on the
+  // next managed install or update.
+  const legacy = path.join(legacyDataRoot(homeDir), 'deployment', 'deployment.env');
+  return fs.existsSync(legacy) ? legacy : current;
 }
 export function getUpdateOperationFile(stateFile = getDeploymentStateFile()) {
   return path.join(path.dirname(stateFile), 'update-operation.json');
@@ -208,15 +215,15 @@ export function createUpdateHandler({
       return;
     }
 
-    const updateScript = path.join(state.active_root, 'scripts', 'gajae-app.sh');
-    const unit = `gajae-app-update-${now()}`;
+    const updateScript = path.join(state.active_root, 'scripts', 'gaminus.sh');
+    const unit = `gaminus-update-${now()}`;
     let child;
     try {
       child = spawn('systemd-run', [
         '--user',
         '--collect',
         `--unit=${unit}`,
-        `--setenv=GAJAE_APP_OPERATION_ID=${operationId}`,
+        `--setenv=GAMINUS_OPERATION_ID=${operationId}`,
         updateScript,
         'update',
         '--ref',

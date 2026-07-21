@@ -43,7 +43,7 @@ type ProviderModelsCacheFile = {
 
 const getProviderModelsCachePath = (): string => path.join(
   os.homedir(),
-  '.gajae-app',
+  '.gaminus',
   'provider-models-cache.json',
 );
 

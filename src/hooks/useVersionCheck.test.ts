@@ -54,17 +54,17 @@ test('version checks use the installed release tag for ahead, equal, and behind 
       { installMode: 'managed', installedReleaseTag: versionCase.installedReleaseTag },
       { tag_name: versionCase.latestTag },
     );
-    const result = await fetchVersionCheck('devswha', 'gajae-app-v1', fetchMock);
+    const result = await fetchVersionCheck('devswha', 'gaminus', fetchMock);
 
     assert.equal(result.releaseStatus, versionCase.status);
     assert.equal(result.updateAvailable, versionCase.updateAvailable);
-    assert.equal(requests[1], 'https://api.github.com/repos/devswha/gajae-app-v1/releases/latest');
+    assert.equal(requests[1], 'https://api.github.com/repos/devswha/gaminus/releases/latest');
   }
 });
 
 test('version checks fail closed without an installed tag, releases, or a stable release tag', async () => {
   const missingInstalled = createFetchMock({ installMode: 'unknown', installedReleaseTag: null });
-  const missingInstalledResult = await fetchVersionCheck('devswha', 'gajae-app-v1', missingInstalled.fetchMock);
+  const missingInstalledResult = await fetchVersionCheck('devswha', 'gaminus', missingInstalled.fetchMock);
   assert.equal(missingInstalledResult.updateAvailable, false);
   assert.equal(missingInstalledResult.releaseStatus, null);
   assert.deepEqual(missingInstalled.requests, ['/health']);
@@ -73,7 +73,7 @@ test('version checks fail closed without an installed tag, releases, or a stable
     { installMode: 'managed', installedReleaseTag: 'v1.2.3' },
     {},
   );
-  const noReleaseResult = await fetchVersionCheck('devswha', 'gajae-app-v1', noRelease.fetchMock);
+  const noReleaseResult = await fetchVersionCheck('devswha', 'gaminus', noRelease.fetchMock);
   assert.equal(noReleaseResult.updateAvailable, false);
   assert.equal(noReleaseResult.latestVersion, null);
 
@@ -81,7 +81,7 @@ test('version checks fail closed without an installed tag, releases, or a stable
     { installMode: 'managed', installedReleaseTag: 'v1.2.3' },
     { tag_name: 'v1.3.0-rc.1' },
   );
-  const prereleaseOnlyResult = await fetchVersionCheck('devswha', 'gajae-app-v1', prereleaseOnly.fetchMock);
+  const prereleaseOnlyResult = await fetchVersionCheck('devswha', 'gaminus', prereleaseOnly.fetchMock);
   assert.equal(prereleaseOnlyResult.updateAvailable, false);
   assert.equal(prereleaseOnlyResult.latestVersion, null);
 });

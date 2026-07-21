@@ -3,8 +3,8 @@ import type { TFunction } from 'i18next';
 
 import type { ReleaseInfo } from '../../../../types/sharedTypes';
 
-const GITHUB_ISSUES_URL = 'https://github.com/devswha/gajae-app-v1/issues/new';
-const GITHUB_REPO_URL = 'https://github.com/devswha/gajae-app-v1';
+const GITHUB_ISSUES_URL = 'https://github.com/devswha/gaminus/issues/new';
+const GITHUB_REPO_URL = 'https://github.com/devswha/gaminus';
 
 const DISCORD_INVITE_URL = 'https://discord.gg/dskZax5JPh';
 
@@ -151,7 +151,7 @@ export default function SidebarFooter({
           rel="noopener noreferrer"
           className="text-[10px] text-muted-foreground/40 transition-colors hover:text-muted-foreground"
         >
-          Gajae App v{currentVersion} – {t('branding.openSource')}
+          Gaminus v{currentVersion} – {t('branding.openSource')}
         </a>
       </div>
 

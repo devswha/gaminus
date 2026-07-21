@@ -6,9 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
-const manifestPath = path.join(rootDir, 'native', 'gajae-core', 'Cargo.toml');
+const manifestPath = path.join(rootDir, 'native', 'gaminus-core', 'Cargo.toml');
 const outputDir = path.join(rootDir, 'dist-native');
-const executableName = process.platform === 'win32' ? 'gajae-core.exe' : 'gajae-core';
+const executableName = process.platform === 'win32' ? 'gaminus-core.exe' : 'gaminus-core';
 
 const args = process.argv.slice(2);
 const release = args.length === 1 && args[0] === '--release';
@@ -20,7 +20,14 @@ function runCargo(commandArgs) {
   return new Promise((resolve, reject) => {
     const child = spawn('cargo', commandArgs, {
       cwd: rootDir,
-      env: process.env,
+      env: {
+        ...process.env,
+        // Keep the produced binary independent of the local checkout path so
+        // embedded diagnostics never leak the developer's directory naming.
+        RUSTFLAGS: [process.env.RUSTFLAGS, `--remap-path-prefix=${rootDir}=.`]
+          .filter(Boolean)
+          .join(' '),
+      },
       stdio: ['inherit', 'pipe', 'inherit'],
     });
     let output = '';
@@ -42,7 +49,7 @@ function runCargo(commandArgs) {
           const message = JSON.parse(line);
           if (
             message.reason === 'compiler-artifact' &&
-            message.target?.name === 'gajae-core' &&
+            message.target?.name === 'gaminus-core' &&
             message.target?.kind?.includes('bin') &&
             message.executable
           ) {
@@ -54,7 +61,7 @@ function runCargo(commandArgs) {
         return;
       }
       if (!executable) {
-        reject(new Error('Cargo did not report the gajae-core executable.'));
+        reject(new Error('Cargo did not report the gaminus-core executable.'));
         return;
       }
       resolve(executable);

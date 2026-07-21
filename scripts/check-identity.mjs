@@ -40,12 +40,19 @@ const PROTECTED_FILE_HASHES = new Map([
 const LEGACY_TOKEN = ['cloud', 'cli'].join('');
 const LEGACY_COORDINATE = ['siteboon', 'claudecodeui'].join('/');
 const STALE_FORK_COORDINATE = ['devswha', 'claudecodeui'].join('/');
-const LEGACY_GAJAE_COORDINATE = ['devswha', 'gajae-app'].join('/');
+const LEGACY_GAJAE_COORDINATE = ['devswha/', 'ga', 'jae-app'].join('');
+const LEGACY_GAJAE_TOKEN_PATTERN = ['ga', 'jae', '[-_. ]?', 'app'].join('');
+// The pre-rename systemd unit template must keep its legacy filename so
+// deployments still running the pre-rename manager can update across the
+// Gaminus rename; scripts/gaminus.sh retires the rendered unit afterwards.
+const TRANSITIONAL_COMPAT_PATHS = new Set([
+  ['packaging/systemd/ga', 'jae-app.service'].join(''),
+]);
 const UPSTREAM_NAME = `Cloud${'CLI'} UI`;
 const UPSTREAM_URL = `https://github.com/${LEGACY_COORDINATE}`;
 const UPSTREAM_LINEAGE = [
   '<!-- upstream-lineage:start -->',
-  `Upstream lineage: Gajae App is derived from [${UPSTREAM_NAME}](${UPSTREAM_URL}). Required attribution and license terms are preserved in [LICENSE](LICENSE) and [NOTICE](NOTICE).`,
+  `Upstream lineage: ${PRODUCT_NAME} is derived from [${UPSTREAM_NAME}](${UPSTREAM_URL}). Required attribution and license terms are preserved in [LICENSE](LICENSE) and [NOTICE](NOTICE).`,
   '<!-- upstream-lineage:end -->',
 ].join('\n');
 const LEGACY_MATCHERS = [
@@ -66,8 +73,12 @@ const LEGACY_MATCHERS = [
     expression: new RegExp(STALE_FORK_COORDINATE, 'gi'),
   },
   {
-    label: 'legacy Gajae App coordinate',
-    expression: new RegExp(`${LEGACY_GAJAE_COORDINATE}(?!-v1)`, 'gi'),
+    label: 'legacy pre-rename coordinate',
+    expression: new RegExp(`${LEGACY_GAJAE_COORDINATE}(-v1)?`, 'gi'),
+  },
+  {
+    label: 'legacy pre-rename product token',
+    expression: new RegExp(LEGACY_GAJAE_TOKEN_PATTERN, 'gi'),
   },
 ];
 const CHANGELOG_ALLOWANCES = [
@@ -75,11 +86,20 @@ const CHANGELOG_ALLOWANCES = [
   { matcher: LEGACY_MATCHERS[1], expected: 0 },
   { matcher: LEGACY_MATCHERS[2], expected: 332 },
   { matcher: LEGACY_MATCHERS[3], expected: 0 },
-  { matcher: LEGACY_MATCHERS[4], expected: 0 },
+  { matcher: LEGACY_MATCHERS[4], expected: 2 },
+  { matcher: LEGACY_MATCHERS[5], expected: 15 },
 ];
 const HISTORICAL_PROVENANCE_ALLOWANCES = new Map([
   ['artifacts/clean-repository-migration-report.json', [
     { matcher: LEGACY_MATCHERS[4], expected: 1 },
+    { matcher: LEGACY_MATCHERS[5], expected: 2 },
+  ]],
+  ['artifacts/api-package-test-report.json', [
+    { matcher: LEGACY_MATCHERS[5], expected: 3 },
+  ]],
+  ['docs/UPSTREAM.md', [
+    { matcher: LEGACY_MATCHERS[4], expected: 1 },
+    { matcher: LEGACY_MATCHERS[5], expected: 2 },
   ]],
 ]);
 const DATED_MIGRATION_HISTORY = /^docs\/(?:history|migration)\/\d{4}-\d{2}-\d{2}(?:[-_][^/]+)?\.md$/i;
@@ -130,6 +150,9 @@ function lineAndColumn(text, index) {
 }
 
 function scanPath(relativePath) {
+  if (TRANSITIONAL_COMPAT_PATHS.has(relativePath)) {
+    return;
+  }
   for (const matcher of LEGACY_MATCHERS) {
     if (matcher.expression.test(relativePath)) {
       addError(`${relativePath}: ${matcher.label} in path`);
@@ -181,13 +204,21 @@ function validateLocalizedReadme(relativePath, text) {
   scanText(relativePath, text, lineageRanges);
 }
 
-function validateProvenanceDocument(relativePath, text) {
+function validateProvenanceDocument(relativePath, text, allowances = []) {
   const nameRanges = exactRanges(text, UPSTREAM_NAME);
   const urlRanges = exactRanges(text, UPSTREAM_URL);
 
   validateExactCount(relativePath, 'upstream name', nameRanges, 1);
   validateExactCount(relativePath, 'upstream URL', urlRanges, 1);
-  scanText(relativePath, text, [...nameRanges, ...urlRanges]);
+
+  const allowedRanges = [...nameRanges, ...urlRanges];
+  for (const allowance of allowances) {
+    const ranges = matchRanges(text, allowance.matcher.expression);
+    validateExactCount(relativePath, allowance.matcher.label, ranges, allowance.expected);
+    allowedRanges.push(...ranges);
+  }
+
+  scanText(relativePath, text, allowedRanges);
 }
 
 function validateAllowedLegacyReferences(relativePath, text, allowances) {
@@ -229,13 +260,13 @@ function scanSpecialFile(relativePath, buffer) {
     return;
   }
 
+  if (relativePath === 'docs/UPSTREAM.md' || DATED_MIGRATION_HISTORY.test(relativePath)) {
+    validateProvenanceDocument(relativePath, text, HISTORICAL_PROVENANCE_ALLOWANCES.get(relativePath) ?? []);
+    return;
+  }
   const provenanceAllowances = HISTORICAL_PROVENANCE_ALLOWANCES.get(relativePath);
   if (provenanceAllowances) {
     validateAllowedLegacyReferences(relativePath, text, provenanceAllowances);
-    return;
-  }
-  if (relativePath === 'docs/UPSTREAM.md' || DATED_MIGRATION_HISTORY.test(relativePath)) {
-    validateProvenanceDocument(relativePath, text);
     return;
   }
 
@@ -278,6 +309,10 @@ async function walkDirectory(directoryPath, category) {
         continue;
       }
       if (relativePath === 'release/desktop') {
+        continue;
+      }
+      if (relativePath.startsWith('native/') && entry.name === 'target') {
+        // Cargo build caches embed absolute host paths; they are never shipped.
         continue;
       }
 

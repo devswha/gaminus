@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
-const executable = process.platform === 'win32' ? 'gajae-core.exe' : 'gajae-core';
+const executable = process.platform === 'win32' ? 'gaminus-core.exe' : 'gaminus-core';
 const corePath = fileURLToPath(new URL(`../dist-native/${executable}`, import.meta.url));
 
 type CoreResult = {
@@ -30,7 +30,7 @@ function runCore(
     const stderr: Buffer[] = [];
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      reject(new Error('gajae-core test timed out.'));
+      reject(new Error('gaminus-core test timed out.'));
     }, 5_000);
     child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk));
@@ -60,12 +60,12 @@ test('native core reports its pinned binary identity', async () => {
 
   assert.equal(result.code, 0);
   assert.equal(result.signal, null);
-  assert.match(result.stdout.toString('utf8'), /^gajae-core 0\.2\.0\n$/u);
+  assert.match(result.stdout.toString('utf8'), /^gaminus-core 0\.2\.0\n$/u);
   assert.equal(result.stderr.length, 0);
 });
 
 test('native core recursively watches multiple roots and filters non-transcript files', async () => {
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'gajae-core-watch-'));
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'gaminus-core-watch-'));
   const firstRoot = path.join(temporaryRoot, 'first');
   const secondRoot = path.join(temporaryRoot, 'second');
   await Promise.all([
@@ -207,7 +207,7 @@ test('native core fails safely when its child executable is unavailable', async 
 
   assert.equal(result.code, 1);
   assert.equal(result.stdout.length, 0);
-  assert.equal(result.stderr.toString('utf8'), 'gajae-core: spawn failed\n');
+  assert.equal(result.stderr.toString('utf8'), 'gaminus-core: spawn failed\n');
 });
 
 test('native core carries the real worker initialize and shutdown protocol', async () => {
@@ -285,7 +285,7 @@ test('native core carries the real worker initialize and shutdown protocol', asy
 });
 
 test('native job authority persists and reconciles state across process replacement', async () => {
-  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'gajae-core-jobs-'));
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), 'gaminus-core-jobs-'));
   const database = path.join(temporaryRoot, 'jobs.sqlite3');
   const lease = { owner: 'worker-a', generation: 1 };
   const frames = [

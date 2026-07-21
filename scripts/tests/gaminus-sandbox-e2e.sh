@@ -34,7 +34,7 @@ if [[ "${1:-}" != "--sanitized" ]]; then
     REAL_HOME_SAMPLE_MTIME="$("$STAT_BIN" -c %Y "$REAL_HOME_SAMPLE")"
     REAL_HOME_SAMPLE_SUM="$("$SHA256SUM_BIN" "$REAL_HOME_SAMPLE")"
   fi
-  SANITIZED_HOME="$("$MKTEMP_BIN" -d "${TMPDIR:-/tmp}/gajae-app-sandbox-home.XXXXXX")"
+  SANITIZED_HOME="$("$MKTEMP_BIN" -d "${TMPDIR:-/tmp}/gaminus-sandbox-home.XXXXXX")"
   SANITIZED_PATH=""
   for tool in "$BASH_BIN" "$ENV_BIN" "$MKTEMP_BIN" "$(resolve_tool git)" "$(resolve_tool node)" "$(resolve_tool npm)" "$(resolve_tool awk)" "$(resolve_tool curl)" "$(resolve_tool sha256sum)" "$(resolve_tool sleep)" "$(resolve_tool mkdir)" "$(resolve_tool rm)" "$(resolve_tool cp)" "$(resolve_tool sed)" "$(resolve_tool grep)" "$(resolve_tool dirname)" "$(resolve_tool chmod)"; do
     tool_dir="${tool%/*}"
@@ -71,7 +71,7 @@ git_sandbox() {
   GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null GIT_TEMPLATE_DIR= git "$@"
 }
 if (( ADVERSARIAL_PROBE )); then
-  probe_repo="$(mktemp -d "${TMPDIR:-/tmp}/gajae-app-sandbox-git-probe.XXXXXX")"
+  probe_repo="$(mktemp -d "${TMPDIR:-/tmp}/gaminus-sandbox-git-probe.XXXXXX")"
   git_sandbox -C "$probe_repo" init -q
   printf 'probe\n' > "$probe_repo/README"
   git_sandbox -C "$probe_repo" add README
@@ -80,9 +80,9 @@ if (( ADVERSARIAL_PROBE )); then
   exit 0
 fi
 ROOT="$(git_sandbox rev-parse --show-toplevel)"
-SCRIPT="$ROOT/scripts/gajae-app.sh"
+SCRIPT="$ROOT/scripts/gaminus.sh"
 REAL_NODE="$(command -v node)"
-WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/gajae-app-sandbox.XXXXXX")"
+WORKDIR="$(mktemp -d "${TMPDIR:-/tmp}/gaminus-sandbox.XXXXXX")"
 PORT="$(node -e 'const n=require("net");const s=n.createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')"
 SENTINEL="$WORKDIR/operational-sentinel"
 printf 'do-not-touch\n' > "$SENTINEL"
@@ -113,19 +113,19 @@ git_sandbox -C "$REPO_WORK" init -q
 git_sandbox -C "$REPO_WORK" config user.email sandbox@example.invalid
 git_sandbox -C "$REPO_WORK" config user.name sandbox
 cat > "$REPO_WORK/package.json" <<'JSON'
-{"name":"gajae-app-sandbox","version":"0.0.0","scripts":{"build":"node -e \"require('fs').mkdirSync('dist-server/server',{recursive:true});require('fs').writeFileSync('dist-server/server/index.js','sandbox')\""}}
+{"name":"gaminus-sandbox","version":"0.0.0","scripts":{"build":"node -e \"require('fs').mkdirSync('dist-server/server',{recursive:true});require('fs').writeFileSync('dist-server/server/index.js','sandbox')\""}}
 JSON
 cat > "$REPO_WORK/package-lock.json" <<'JSON'
-{"name":"gajae-app-sandbox","version":"0.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"gajae-app-sandbox","version":"0.0.0"}}}
+{"name":"gaminus-sandbox","version":"0.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"gaminus-sandbox","version":"0.0.0"}}}
 JSON
-cat > "$REPO_WORK/packaging/systemd/gajae-app.service" <<'UNIT'
+cat > "$REPO_WORK/packaging/systemd/gaminus.service" <<'UNIT'
 [Service]
 WorkingDirectory=@APP_ROOT@
 Environment=HOST=@HOST@
 Environment=SERVER_PORT=@PORT@
-ExecStart=@NODE_BIN@ @APP_ROOT@/scripts/gajae-app-runtime.mjs start
+ExecStart=@NODE_BIN@ @APP_ROOT@/scripts/gaminus-runtime.mjs start
 UNIT
-printf 'export {}\n' > "$REPO_WORK/scripts/gajae-app-runtime.mjs"
+printf 'export {}\n' > "$REPO_WORK/scripts/gaminus-runtime.mjs"
 printf 'node_modules/\ndist-server/\n' > "$REPO_WORK/.gitignore"
 git_sandbox -C "$REPO_WORK" add .
 git_sandbox -C "$REPO_WORK" commit -qm release-1
@@ -144,7 +144,7 @@ cat > "$WORKDIR/bin/fake-systemctl" <<'FAKE'
 #!/usr/bin/env bash
 set -euo pipefail
 state="$HOME/.fake-systemctl"
-unit="${GAJAE_APP_SYSTEMD_USER_DIR:?}/gajae-app.service"
+unit="${GAMINUS_SYSTEMD_USER_DIR:?}/gaminus.service"
 mkdir -p "$state"
 command=""
 for arg in "$@"; do
@@ -197,11 +197,11 @@ run_app() {
   env -i \
     HOME="$WORKDIR/home" \
     XDG_CONFIG_HOME="$WORKDIR/config" \
-    GAJAE_APP_SYSTEMD_USER_DIR="$WORKDIR/systemd" \
-    GAJAE_APP_INSTALL_DIR="$WORKDIR/install" \
-    GAJAE_APP_SYSTEMCTL="$WORKDIR/bin/fake-systemctl" \
-    GAJAE_APP_REPOSITORY="$REPO_BARE" \
-    GAJAE_APP_REF="$1" \
+    GAMINUS_SYSTEMD_USER_DIR="$WORKDIR/systemd" \
+    GAMINUS_INSTALL_DIR="$WORKDIR/install" \
+    GAMINUS_SYSTEMCTL="$WORKDIR/bin/fake-systemctl" \
+    GAMINUS_REPOSITORY="$REPO_BARE" \
+    GAMINUS_REF="$1" \
     PORT="$PORT" \
     GIT_CONFIG_GLOBAL=/dev/null \
     GIT_CONFIG_SYSTEM=/dev/null \
@@ -210,7 +210,7 @@ run_app() {
     bash "$SCRIPT" "$2" --port "$PORT" "${@:3}"
 }
 fake_state="$WORKDIR/home/.fake-systemctl"
-state_file="$WORKDIR/home/.gajae-app/deployment/deployment.env"
+state_file="$WORKDIR/home/.gaminus/deployment/deployment.env"
 value() { awk -F= -v wanted="$1" '$1 == wanted {print substr($0, length(wanted) + 2); exit}' "$state_file"; }
 assert_eq() { [[ "$1" == "$2" ]] || { printf 'assertion failed: expected %s, got %s\n' "$2" "$1" >&2; exit 1; }; }
 assert_health_root() {
@@ -250,6 +250,52 @@ assert_eq "$(value sha)" "$new_sha"
 assert_eq "$(value active_root)" "$new_root"
 assert_eq "$(value release_tag)" v0.0.2
 assert_health_root "$new_root"
+
+# ── Legacy adoption: a pre-rename deployment is adopted on the next update ──
+run_app_legacy() {
+  env -i \
+    HOME="$WORKDIR/home" \
+    XDG_CONFIG_HOME="$WORKDIR/config" \
+    GAMINUS_SYSTEMD_USER_DIR="$WORKDIR/systemd" \
+    GAMINUS_SYSTEMCTL="$WORKDIR/bin/fake-systemctl" \
+    GAMINUS_REPOSITORY="$REPO_BARE" \
+    GAMINUS_REF="$1" \
+    PORT="$PORT" \
+    GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_CONFIG_SYSTEM=/dev/null \
+    GIT_TEMPLATE_DIR= \
+    PATH="$WORKDIR/bin:$PATH" \
+    bash "$SCRIPT" "$2" --port "$PORT" "${@:3}"
+}
+legacy_data_root="$WORKDIR/home/.ga""jae-app"
+legacy_install_dir="$WORKDIR/home/.local/share/ga""jae-app"
+legacy_unit_file="$WORKDIR/systemd/gajae""-app.service"
+adopted_install_dir="$WORKDIR/home/.local/share/gaminus"
+adopted_state_dir="$WORKDIR/home/.gaminus/deployment"
+mkdir -p "$legacy_data_root" "$WORKDIR/home/.local/share" "$WORKDIR/systemd"
+mv "$adopted_state_dir" "$legacy_data_root/deployment"
+mv "$WORKDIR/install" "$legacy_install_dir"
+sed -i \
+  -e "s|$adopted_state_dir|$legacy_data_root/deployment|g" \
+  -e "s|$WORKDIR/install|$legacy_install_dir|g" \
+  "$legacy_data_root/deployment/deployment.env"
+printf '[Unit]\n' > "$legacy_unit_file"
+state_file="$adopted_state_dir/deployment.env"
+
+run_app_legacy v0.0.2 update
+[[ ! -e "$legacy_data_root/deployment" ]] || { echo 'legacy deployment state was not adopted' >&2; exit 1; }
+[[ ! -e "$legacy_unit_file" ]] || { echo 'legacy unit file was not retired' >&2; exit 1; }
+[[ ! -e "$legacy_install_dir" && -d "$adopted_install_dir" ]] || { echo 'legacy install dir was not adopted' >&2; exit 1; }
+assert_eq "$(git -C "$adopted_install_dir" remote get-url origin)" "$REPO_BARE"
+assert_eq "$(value update_state)" current
+assert_eq "$(value release_tag)" v0.0.2
+case "$(value active_root)" in
+  "$adopted_state_dir"/releases/*) ;;
+  *) { echo "adopted active_root still points at a legacy path: $(value active_root)" >&2; exit 1; } ;;
+esac
+assert_health_root "$(value active_root)"
+status="$(run_app_legacy v0.0.2 status --json)"
+printf '%s\n' "$status" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const v=JSON.parse(s);if(v.updateState!=="current"||v.service!=="active"||v.health!=="healthy")process.exit(1)})'
 assert_eq "$(sha256sum "$SENTINEL")" "$SENTINEL_SUM"
 if (( ! SKIP_REAL_HOME_CHECK )); then
   assert_eq "$(stat -c %Y "$REAL_HOME_SAMPLE")" "$REAL_HOME_SAMPLE_MTIME"
@@ -257,7 +303,7 @@ if (( ! SKIP_REAL_HOME_CHECK )); then
 fi
 
 if (( ! ADVERSARIAL_PROBE )); then
-  adversary_dir="$(mktemp -d "${TMPDIR:-/tmp}/gajae-app-sandbox-adversary.XXXXXX")"
+  adversary_dir="$(mktemp -d "${TMPDIR:-/tmp}/gaminus-sandbox-adversary.XXXXXX")"
   hook_marker="$adversary_dir/hook-ran"
   mkdir -p "$adversary_dir/hooks"
   cat > "$adversary_dir/hooks/post-commit" <<HOOK
@@ -278,4 +324,4 @@ CONFIG
   rm -rf "$adversary_dir"
 fi
 
-printf 'sandbox e2e passed: install, update, health-failure rollback, hostile git environment\n'
+printf 'sandbox e2e passed: install, update, health-failure rollback, legacy adoption, hostile git environment\n'

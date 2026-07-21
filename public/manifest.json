@@ -1,7 +1,7 @@
 {
-  "name": "Gajae App",
-  "short_name": "Gajae App",
-  "description": "Gajae App — self-hosted AI coding workspace",
+  "name": "Gaminus",
+  "short_name": "Gaminus",
+  "description": "Gaminus — self-hosted AI coding workspace",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1b0f0a",

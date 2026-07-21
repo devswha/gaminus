@@ -29,7 +29,7 @@ export function VersionUpgradeModal({
     const { t } = useTranslation('common');
     const isManagedInstall = installMode === 'managed';
     const upgradeCommand = isManagedInstall
-        ? 'gajae-app.sh update'
+        ? 'gaminus.sh update'
         : 'git checkout main && git pull && npm install';
     const updatePollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const updatePollSession = useRef(0);

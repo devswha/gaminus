@@ -352,7 +352,7 @@ export class ViewHost {
     const view = this.getOrCreateTabView(tabId, target);
     if (view.__gajaeLoadingOrigin) return;
     this.attach(view);
-    const html = buildPlaceholderHtml(view.__gajaeTarget.name || this.appName, 'Starting Gajae App Local...', logs);
+    const html = buildPlaceholderHtml(view.__gajaeTarget.name || this.appName, 'Starting Gaminus Local...', logs);
     if (view.__gajaeStartupHtml === html) return;
     await this.loadPlaceholder(view, html);
     view.__gajaeStartupHtml = html;
