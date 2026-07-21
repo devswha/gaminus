@@ -18,6 +18,20 @@ import {
   type JsonObject,
 } from './gjc-worker-protocol.js';
 
+// The supervisor intentionally unrefs its watchdog timers so a live server
+// never stays up just for them. While a test awaits an outcome driven ONLY by
+// such a timer, hold one referenced handle open; otherwise the node:test event
+// loop can drain first and cancel every pending subtest (observed on
+// Node 22.23.x as `cancelledByParent`).
+async function settlesByUnrefTimer<T>(promise: Promise<T>): Promise<T> {
+  const keepAlive = setInterval(() => {}, 20);
+  try {
+    return await promise;
+  } finally {
+    clearInterval(keepAlive);
+  }
+}
+
 class FakeChild extends EventEmitter {
   readonly stdin = new PassThrough();
   readonly stdout = new PassThrough();
@@ -202,10 +216,10 @@ test('fails closed when the Windows job guard never proves app ownership', async
     initializeTimeoutMs: 5,
   });
 
-  await assert.rejects(
+  await settlesByUnrefTimer(assert.rejects(
     supervisor.spawn('hello', {}, { send() {} }),
     /GJC worker failed/,
-  );
+  ));
 
   assert.equal(child.killed, true);
 });

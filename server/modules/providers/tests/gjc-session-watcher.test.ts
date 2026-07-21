@@ -5,6 +5,20 @@ import { fileURLToPath } from 'node:url';
 
 import { GjcSessionWatcher, type GjcSessionWatcherOptions } from '../services/gjc-session-watcher.service.js';
 
+// The watcher intentionally unrefs its ready/drain/exit timers so a live
+// server never stays up just for them. While a test awaits an outcome driven
+// ONLY by such a timer, hold one referenced handle open; otherwise the
+// node:test event loop can drain first and cancel every pending subtest
+// (observed on Node 22.23.x as `cancelledByParent`).
+async function settlesByUnrefTimer<T>(promise: Promise<T>): Promise<T> {
+  const keepAlive = setInterval(() => {}, 20);
+  try {
+    return await promise;
+  } finally {
+    clearInterval(keepAlive);
+  }
+}
+
 class FakeChild extends EventEmitter {
   readonly stdin = new EventEmitter() as EventEmitter & { end(): void };
   readonly stdout = new EventEmitter();
@@ -123,7 +137,7 @@ test('reports unexpected exit only once and enforces ready timeout', async () =>
   exited.child.emit('close', 1, null);
   assert.equal(exited.failures.length, 1);
   const timedOut = setup({ readyTimeoutMs: 1 });
-  await assert.rejects(timedOut.watcher.start(), /GJC session watcher failed\./u);
+  await settlesByUnrefTimer(assert.rejects(timedOut.watcher.start(), /GJC session watcher failed\./u));
   assert.equal(timedOut.failures.length, 1);
 });
 
@@ -179,7 +193,7 @@ test('close cancels queued callbacks at its deadline and reaps a non-exiting chi
   child.output('{"protocolVersion":1,"kind":"event","event":"add","path":"warmup"}\n');
   await new Promise((resolve) => setImmediate(resolve));
   child.output('{"protocolVersion":1,"kind":"event","event":"add","path":"accepted"}\n');
-  await watcher.close();
+  await settlesByUnrefTimer(watcher.close());
 
   assert.deepEqual(child.kills, ['SIGKILL']);
   assert.deepEqual(callbacks, ['warmup']);
@@ -193,7 +207,7 @@ test('close before readiness rejects the pending start without reporting a runti
   const { watcher, failures } = setup();
   const started = watcher.start();
   const rejected = assert.rejects(started, /GJC session watcher failed\./u);
-  await watcher.close();
+  await settlesByUnrefTimer(watcher.close());
 
   await rejected;
   assert.equal(failures.length, 0);
